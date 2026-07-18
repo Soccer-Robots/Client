@@ -22,6 +22,7 @@ logs
 .env
 .env.*
 !.env.example
+cert-dev.pem
 
 # a folder I have for backups
 .history/
