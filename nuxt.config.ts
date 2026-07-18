@@ -1,3 +1,4 @@
+console.log("LOADING MY NUXT CONFIG")
 export default defineNuxtConfig({
   runtimeConfig: {
     CHANNEL_NAME: '',
@@ -35,5 +36,7 @@ export default defineNuxtConfig({
     { path: '~/components', pathPrefix: false } // Ensures auto-import without modifying _GlobalComponents
   ],
 
-  compatibilityDate: '2024-10-03'
+  nitro: {
+    compatibilityDate: '2026-07-18'
+  }
 })
