@@ -312,25 +312,35 @@ server.on("upgrade", async (request, socket, head) => {
 
     // Authenticate using jwt from cookie srtoken
     const srtoken = cookieObj["srtoken"]
-    const claims: any = jwt.verify(srtoken, fs.readFileSync(process.cwd()+"/cert-dev.pem"), (error, decoded) => {
-        //if the claims failed, destroy it. otherwise, return the decoded srtoken
-        if(error){ 
-            console.log("claim error?")
-            console.error(error);
+    const decodedHeader = jwt.decode(srtoken, { complete: true });
 
-            socket.destroy()
-            return
-        }
-        return decoded
-    })
+    console.log("decoded header is:")
+    console.log(decodedHeader?.header);
 
-    if(!(claims instanceof Object && claims["sub"])){ // if jwt is invalid, close connection
+    let claims: any;
+
+    try {
+        claims = jwt.verify(
+            srtoken,
+            process.env.JWT_SECRET!,
+            {
+                algorithms: ["HS256"]
+            }
+        );
+    }
+    catch(error) {
+        console.error(error);
+        socket.destroy();
+        return;
+    }
+
+    if(!(claims instanceof Object && claims["id"])){ // if jwt is invalid, close connection
         console.log("invalid jwt")
         socket.destroy()
         return
     }
 
-    const user_id: string = claims["sub"]
+    const user_id: string = claims["id"]
     
     if(allowedUsers.findIndex((element) => { return element["user_id"] === user_id}) === -1){ // if user is not in allowedUsers, close connection
         console.log("not allowed")

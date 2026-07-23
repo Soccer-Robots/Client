@@ -1,7 +1,8 @@
 import { PrismaClient } from "@prisma/client"
 import { nanoid } from "nanoid"
 import { getQuery, setCookie, defineEventHandler, sendRedirect } from "h3"
-import jwt from "jsonwebtoken"
+import fs from "fs";
+import jwt from "jsonwebtoken";
 
 
 const prisma = new PrismaClient()
@@ -33,7 +34,16 @@ export default defineEventHandler(async (event) => {
 
   // Generate permanent session token
   const payload = { id: player.user_id }
-  const sessionToken = jwt.sign(payload, process.env.JWT_SECRET!, { expiresIn: '30d' })
+
+const sessionToken = jwt.sign(
+    payload,
+    process.env.JWT_SECRET!,
+    {
+        algorithm: "HS256",
+        expiresIn: "30d"
+    }
+);
+
   // Update user → remove magic link + set permanent token
   await prisma.player.update({
     where: { user_id: player.user_id },
