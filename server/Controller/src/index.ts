@@ -279,10 +279,12 @@ wss.on("connection", (ws: any, request: IncomingMessage, user_id: string) => {
 // different from a typical http request like GET or POST. But to do
 // this, need to validate security stuff
 server.on("upgrade", async (request, socket, head) => {
+    console.log("Received WS upgrade request", request.headers.cookie);
     // Get cookies
     const cookies = request.headers["cookie"] ?? ""
     if(cookies === ""){ // if no cookies, close connection
         socket.destroy()
+        console.log("destroyed.")
         return
     }
     //split cookies into their key-value pairs
@@ -299,6 +301,7 @@ server.on("upgrade", async (request, socket, head) => {
 
     if(!(cookieObj["srtoken"] && cookieObj["accesspassword"])){ // if no srtoken cookie or accesspassword cookie, close connection
         socket.destroy()
+        console.log("no sr token / access password!")
         return
     }
 
@@ -312,6 +315,9 @@ server.on("upgrade", async (request, socket, head) => {
     const claims: any = jwt.verify(srtoken, fs.readFileSync(process.cwd()+"/cert-dev.pem"), (error, decoded) => {
         //if the claims failed, destroy it. otherwise, return the decoded srtoken
         if(error){ 
+            console.log("claim error?")
+            console.error(error);
+
             socket.destroy()
             return
         }
@@ -319,6 +325,7 @@ server.on("upgrade", async (request, socket, head) => {
     })
 
     if(!(claims instanceof Object && claims["sub"])){ // if jwt is invalid, close connection
+        console.log("invalid jwt")
         socket.destroy()
         return
     }
@@ -326,6 +333,7 @@ server.on("upgrade", async (request, socket, head) => {
     const user_id: string = claims["sub"]
     
     if(allowedUsers.findIndex((element) => { return element["user_id"] === user_id}) === -1){ // if user is not in allowedUsers, close connection
+        console.log("not allowed")
         socket.destroy()
         return
     }

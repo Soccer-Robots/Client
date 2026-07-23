@@ -59,9 +59,10 @@ onMounted(() => {
   ws_controller.value = new WebSocket(`ws://${useRuntimeConfig().public.LOCALHOST}:${useRuntimeConfig().public.PORT_WSS_CONTROLLER_CLIENT}`)
 
   ws_controller.value.onopen = () => {
+    console.log("hey what's up guys larp critikal here")
     const wasdMapping: { [key: string]: number, "w": number, "a": number, "s": number, "d": number } = {"w": 0, "a": 0, "s": 0, "d": 0}
     const updateKeyUp = (event: KeyboardEvent) => {
-        
+        console.log("up down pressed!")
       if(wasdMapping.hasOwnProperty(event.key)){
         wasdMapping[event.key] = 0
         keyInputs()
@@ -69,6 +70,8 @@ onMounted(() => {
     }
         
     const updateKeyDown = (event: KeyboardEvent) => {
+              console.log("up down pressed!")
+
       if(event.repeat){
         console.log("repeating")
       }
