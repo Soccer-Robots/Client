@@ -17,7 +17,7 @@
           <button @click="goToLogin">Log In</button>
         </div>
         <div v-if="isLoggedIn">
-          <NuxtLink to="/player">
+          <NuxtLink to="/game">
             <button>Become Player</button>
           </NuxtLink>
         </div>
