@@ -87,7 +87,9 @@ const gameCycle = setInterval( async () => {
             else{ // ask if robots are ready to play
                 ws_raspberry.send(JSON.stringify({
                     "type": "CHECK_READY",
-                    "payload": ""
+                    "payload": {
+                        "num_players": numPlayers * 2
+                    }
                 }))   
             }
         }
