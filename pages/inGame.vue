@@ -113,7 +113,7 @@ const player2 = ref<{score: number, username: string}>()
 
 watch(timer, (value) =>{
   if(Number(value) == 0){
-    router.push("/player");
+    router.push("/game");
   }
 
 })

@@ -77,5 +77,5 @@ console.log(`Set sruser cookie for player ${player.username}.`)
 
 
   // Redirect to player page
-  return sendRedirect(event, "/player")
+  return sendRedirect(event, "/game")
 })
