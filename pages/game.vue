@@ -570,16 +570,33 @@ const goToLogin = async () => {
 };
 
 const logout = async () => {
+  if (isLoggingOut.value) {
+    return;
+  }
+
   isLoggingOut.value = true;
 
   try {
-    disconnectQueue(true);
-    endGame();
+    // Best-effort game cleanup.
+    // These should never prevent account logout.
+    try {
+      disconnectQueue(true);
+    } catch (error) {
+      console.error("Failed to disconnect from queue during logout:", error);
+    }
 
+    try {
+      endGame();
+    } catch (error) {
+      console.error("Failed to disconnect controller during logout:", error);
+    }
+
+    // Actually revoke the authenticated session.
     await $fetch("/api/user-logout", {
       method: "POST",
     });
 
+    // Immediately update the client UI.
     sruser.value = null;
     accessPassword.value = null;
 

@@ -15,20 +15,17 @@ export default defineEventHandler(async (event) => {
         data: { sessionToken: null }
       })
     } catch (err) {
+      console.error("Failed to revoke session:", err);
     }
   }
 
-  // Clear cookies
-  setCookie(event, 'srtoken', '', {
-     maxAge: 0,
-     httpOnly: true,
-     path: '/'
-    })
-  setCookie(event, 'sruser', '', {
-     maxAge: 0, 
-     httpOnly: true, 
-     path: '/' 
-    })
+  deleteCookie(event, "srtoken", { path: '/' });
+  deleteCookie(event, "sruser", { path: '/' });
+  deleteCookie(event, "magic_token", { path: '/' });
+  deleteCookie(event, "accesspassword", { path: '/' });
 
-  return sendRedirect(event, '/')
+
+  return {
+    success: true,
+  };
 })
