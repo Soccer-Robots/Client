@@ -417,12 +417,11 @@ const logout = async () => {
   isLoggingOut.value = true;
 
   try {
-    // Game cleanup should not prevent account logout.
     try {
       disconnectQueue(true);
     } catch (error) {
       console.error(
-        "Failed to disconnect queue during logout:",
+        "Failed to disconnect from queue during logout:",
         error,
       );
     }
@@ -440,10 +439,8 @@ const logout = async () => {
       method: "POST",
     });
 
-    sruser.value = null;
-    accessPassword.value = null;
-
-    // Fresh request with authentication cookies removed.
+    // Do not manually mutate sruser/accessPassword here.
+    // Do not navigateTo("/") from "/".
     if (import.meta.client) {
       window.location.replace("/");
     }
@@ -451,9 +448,7 @@ const logout = async () => {
     console.error("Logout failed:", error);
 
     if (import.meta.client) {
-      window.alert(
-        "Failed to log out. Please try again.",
-      );
+      window.alert("Failed to log out. Please try again.");
     }
   } finally {
     isLoggingOut.value = false;

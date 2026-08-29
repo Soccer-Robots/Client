@@ -14,7 +14,6 @@ export default defineEventHandler(async (event) => {
 
   try {
     if (sessionToken) {
-      // updateMany does NOT throw if no player matches.
       const result = await prisma.player.updateMany({
         where: {
           sessionToken,
@@ -28,9 +27,6 @@ export default defineEventHandler(async (event) => {
     }
   } catch (error) {
     console.error("Failed to revoke session:", error);
-
-    // I would still clear the browser cookies below.
-    // Logout should not trap the user in a broken session.
   }
 
   deleteCookie(event, "srtoken", {
