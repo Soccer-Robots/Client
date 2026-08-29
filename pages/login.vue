@@ -28,7 +28,7 @@ onMounted(async () => {
       params: { token }
     })
     status.value = 'success'
-    setTimeout(() => router.push('/game'), 1500
+    setTimeout(() => router.push('/'), 1500
   )
   } catch (err) {
     console.error(err)

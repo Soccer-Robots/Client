@@ -1,6 +1,6 @@
 <!--This is the overlay for the about us page.-->
 <template>
-<div class="fixed w-full h-full inset-0 bg-opacity-20 backdrop-blur-sm flex" style="z-index:2;">
+<div class="fixed w-full h-full inset-0 bg-opacity-20 backdrop-blur-sm flex text-black" style="z-index:2;">
       <div class="rounded-lg p-4 bg-white border-2 border-black" style="width: 35vw; height: 90vh; margin: auto;">
         <div class="w-min h-min text-black" style="margin-left: auto;">
           <p @click="emitClose" class="cursor-pointer">X</p>
