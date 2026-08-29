@@ -417,35 +417,43 @@ const logout = async () => {
   isLoggingOut.value = true;
 
   try {
-    // Best-effort game cleanup.
-    // These should never prevent account logout.
+    // Game cleanup should not prevent account logout.
     try {
       disconnectQueue(true);
     } catch (error) {
-      console.error("Failed to disconnect from queue during logout:", error);
+      console.error(
+        "Failed to disconnect queue during logout:",
+        error,
+      );
     }
 
     try {
       endGame();
     } catch (error) {
-      console.error("Failed to disconnect controller during logout:", error);
+      console.error(
+        "Failed to end game during logout:",
+        error,
+      );
     }
 
-    // Actually revoke the authenticated session.
     await $fetch("/api/user-logout", {
       method: "POST",
     });
 
-    // Immediately update the client UI.
     sruser.value = null;
     accessPassword.value = null;
 
-    await navigateTo("/");
+    // Fresh request with authentication cookies removed.
+    if (import.meta.client) {
+      window.location.replace("/");
+    }
   } catch (error) {
     console.error("Logout failed:", error);
 
     if (import.meta.client) {
-      window.alert("Failed to log out. Please try again.");
+      window.alert(
+        "Failed to log out. Please try again.",
+      );
     }
   } finally {
     isLoggingOut.value = false;

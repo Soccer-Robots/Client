@@ -72,12 +72,20 @@ const sessionToken = jwt.sign(
 
   console.log(`Set srtoken cookie for player ${player.username}.`)
   // Set username cookie
-  setCookie(event, "sruser", player.username, {
-  path: "/",
-  maxAge: 60 * 60 * 24 * 30,
-  sameSite: "lax",
-  secure: false
-})
+  setCookie(
+  event,
+  "sruser",
+  JSON.stringify({
+    username: player.username,
+    role: player.role,
+  }),
+  {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+    sameSite: "lax",
+    secure: false,
+  },
+);
 
 console.log(`Set sruser cookie for player ${player.username}.`) 
 

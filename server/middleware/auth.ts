@@ -1,43 +1,122 @@
-import jwt from "jsonwebtoken" // used to verify JWT tokens
-import { PrismaClient } from "@prisma/client" // access the database
+import jwt from "jsonwebtoken";
+import { PrismaClient } from "@prisma/client";
+import {
+  defineEventHandler,
+  getCookie,
+  deleteCookie,
+  setCookie,
+} from "h3";
 
-const prisma = new PrismaClient() // create a prisma instance
+const prisma = new PrismaClient();
+
+interface SessionClaims extends jwt.JwtPayload {
+  id: string;
+}
 
 export default defineEventHandler(async (event) => {
-  // attach prisma to the request context so it can be used in other handlers
-  event.context.prisma = prisma
+  // Make Prisma available to later server handlers
+  event.context.prisma = prisma;
 
-  // get the 'srtoken' cookie, which should contain the jwt token
-  const srtoken = getCookie(event, 'srtoken') || ''
+  const srtoken = getCookie(event, "srtoken");
+
+  // No session cookie = not logged in
   if (!srtoken) {
-    // if no token, clear the user cookie and exit early
-    setCookie(event, 'sruser', '')
-    return
+    deleteCookie(event, "sruser", {
+      path: "/",
+    });
+
+    return;
   }
 
   try {
-    // verify the jwt token using the secret key
-    const claims: any = jwt.verify(srtoken, process.env.JWT_SECRET!)
-    // attach decoded claims to the request context
-    event.context.claims = claims
-
-    // fetch the player based on id from the token claims
-    const player = await prisma.player.findUnique({
-      where: { user_id: claims.id },
-      select: { username: true, role: true }
-    })
-
-    if (player) {
-      // if player found, store the player info as a cookie
-      setCookie(event, 'sruser', JSON.stringify(player))
-    } else {
-      // if no player, clear user cookie
-      setCookie(event, 'sruser', '')
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is not configured");
     }
-  } catch (err) {
-    // if token is invalid or expired, clear cookies and log error
-    console.error("JWT verification failed:", err)
-    setCookie(event, 'srtoken', '')
-    setCookie(event, 'sruser', '')
+
+    // --------------------------------------------------
+    // 1. Verify the JWT itself
+    // --------------------------------------------------
+    const claims = jwt.verify(
+      srtoken,
+      process.env.JWT_SECRET,
+      {
+        algorithms: ["HS256"],
+      },
+    ) as SessionClaims;
+
+    if (!claims.id) {
+      throw new Error("Session token is missing player id");
+    }
+
+    // --------------------------------------------------
+    // 2. Find the player
+    // --------------------------------------------------
+    const player = await prisma.player.findUnique({
+      where: {
+        user_id: claims.id,
+      },
+
+      select: {
+        user_id: true,
+        username: true,
+        role: true,
+        sessionToken: true,
+      },
+    });
+
+    if (!player) {
+      throw new Error("Player does not exist");
+    }
+
+    // --------------------------------------------------
+    // 3. IMPORTANT:
+    // Verify that this JWT is still the active session
+    // --------------------------------------------------
+    if (
+      !player.sessionToken ||
+      player.sessionToken !== srtoken
+    ) {
+      throw new Error("Session has been revoked");
+    }
+
+    // --------------------------------------------------
+    // 4. Session is valid
+    // --------------------------------------------------
+    event.context.claims = claims;
+
+    event.context.user = {
+      user_id: player.user_id,
+      username: player.username,
+      role: player.role,
+    };
+
+    setCookie(
+      event,
+      "sruser",
+      JSON.stringify({
+        username: player.username,
+        role: player.role,
+      }),
+      {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+        sameSite: "lax",
+        secure: false,
+      },
+    );
+  } catch (error) {
+    console.error("Session validation failed:", error);
+
+    // Invalid, expired, or revoked session
+    deleteCookie(event, "srtoken", {
+      path: "/",
+    });
+
+    deleteCookie(event, "sruser", {
+      path: "/",
+    });
+
+    event.context.claims = undefined;
+    event.context.user = undefined;
   }
-})
+});
