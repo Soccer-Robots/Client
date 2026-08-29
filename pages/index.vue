@@ -296,19 +296,6 @@ import {
   watch,
 } from "vue";
 
-import Scoreboard from "~/components/Gameplay/Scoreboard.vue";
-import VideoStream from "~/components/Gameplay/VideoStream.vue";
-import QueueContainer from "~/components/Queue/QueueContainer.vue";
-import ConfirmMatchOverlay from "~/components/ConfirmMatch/ConfirmMatchOverlay.vue";
-
-import HelpOverlay from "~/components/Popups/HelpOverlay.vue";
-import AboutUsOverlay from "~/components/Popups/AboutUsOverlay.vue";
-import HowToPlayOverlay from "~/components/Popups/HowToPlayOverlay.vue";
-import AdminPanel from "~/components/Popups/AdminPanel.vue";
-
-import LeaderBoardOverlay from "~/components/LeaderBoard/LeaderBoardOverlay.vue";
-import LogInOverlay from "~/components/userauth/LogInOverlay.vue";
-
 type Theme = "light" | "dark";
 
 type ConnectionStatus =
