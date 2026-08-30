@@ -98,7 +98,7 @@
         @close-admin-panel="showAdminPanel = false"
       />
     </ClientOnly>
-  </div>
+  </div>  
 </template>
 
 <script setup lang="ts">
@@ -112,6 +112,8 @@ import {
   shallowRef,
   watch,
 } from "vue";
+import { useGameFeed } from "~/composables/useGameFeed";
+import { useMatchQueue } from "~/composables/useMatchQueue";
 
 type LeaderboardSort = "wins" | "losses" | "goals" | "gamesPlayed" | "ratio";
 
@@ -169,11 +171,6 @@ type ControlKey = "w" | "a" | "s" | "d";
 interface SessionUser {
   username?: string;
   role?: string;
-}
-
-interface MatchPlayer {
-  username: string;
-  score: number;
 }
 
 interface SocketMessage {
@@ -363,21 +360,7 @@ const toggleTheme = () => {
 /* Shared game state                                                          */
 /* -------------------------------------------------------------------------- */
 
-const queue = ref<string[]>([]);
-const timer = ref(0);
-
-const player1 = ref<MatchPlayer>({
-  username: "",
-  score: 0,
-});
-
-const player2 = ref<MatchPlayer>({
-  username: "",
-  score: 0,
-});
-
 const isInGame = ref(false);
-const hasSeenPositiveTimer = ref(false);
 
 const streamType = computed<"twitch" | "janus">(() => {
   return isInGame.value ? "janus" : "twitch";
@@ -406,16 +389,6 @@ const createWebSocketUrl = (port: unknown) => {
   return `${protocol}://${serviceHost.value}:${String(port)}`;
 };
 
-const createHttpUrl = (port: unknown, path: string) => {
-  if (!import.meta.client) {
-    return "";
-  }
-
-  const protocol = window.location.protocol === "https:" ? "https" : "http";
-
-  return `${protocol}://${serviceHost.value}:${String(port)}${path}`;
-};
-
 /* -------------------------------------------------------------------------- */
 /* Safe message parsing                                                       */
 /* -------------------------------------------------------------------------- */
@@ -440,324 +413,6 @@ const parseMessage = (value: unknown): SocketMessage | null => {
      */
     return null;
   }
-};
-
-const parseMatchPlayer = (value: unknown): MatchPlayer | null => {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const candidate = value as Partial<MatchPlayer>;
-
-  if (
-    typeof candidate.username !== "string" ||
-    typeof candidate.score !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    username: candidate.username,
-    score: candidate.score,
-  };
-};
-
-/* -------------------------------------------------------------------------- */
-/* Server-sent events: public game information                                */
-/* -------------------------------------------------------------------------- */
-
-const gameFeed = shallowRef<EventSource | null>(null);
-const gameFeedStatus = ref<ConnectionStatus>("disconnected");
-
-const connectGameFeed = () => {
-  if (!import.meta.client || gameFeed.value) {
-    return;
-  }
-
-  try {
-    gameFeedStatus.value = "connecting";
-
-    const source = new EventSource(
-      createHttpUrl(config.public.PORT_SSE_GM, "/sse-info"),
-    );
-
-    gameFeed.value = source;
-
-    source.onopen = () => {
-      gameFeedStatus.value = "connected";
-    };
-
-    source.onerror = () => {
-      /*
-       * EventSource reconnects automatically. Keep the object alive and show
-       * that reconnection is in progress.
-       */
-      gameFeedStatus.value = "reconnecting";
-    };
-
-    source.onmessage = (event) => {
-      const message = parseMessage(event.data);
-
-      if (!message?.type) {
-        return;
-      }
-
-      if (message.type === "UPDATE_QUEUE" && Array.isArray(message.payload)) {
-        queue.value = message.payload.filter(
-          (username): username is string => typeof username === "string",
-        );
-
-        return;
-      }
-
-      if (
-        message.type === "UPDATE_TIMER" &&
-        typeof message.payload === "number"
-      ) {
-        timer.value = message.payload;
-
-        if (message.payload > 0) {
-          hasSeenPositiveTimer.value = true;
-        }
-
-        if (
-          isInGame.value &&
-          hasSeenPositiveTimer.value &&
-          message.payload <= 0
-        ) {
-          endGame();
-        }
-
-        return;
-      }
-
-      if (
-        message.type === "UPDATE_SCORE" &&
-        message.payload &&
-        typeof message.payload === "object"
-      ) {
-        const payload = message.payload as {
-          player1?: unknown;
-          player2?: unknown;
-        };
-
-        const nextPlayer1 = parseMatchPlayer(payload.player1);
-        const nextPlayer2 = parseMatchPlayer(payload.player2);
-
-        if (nextPlayer1) {
-          player1.value = nextPlayer1;
-        }
-
-        if (nextPlayer2) {
-          player2.value = nextPlayer2;
-        }
-      }
-    };
-  } catch (error) {
-    console.error("Failed to connect to the game feed:", error);
-    gameFeedStatus.value = "error";
-  }
-};
-
-const disconnectGameFeed = () => {
-  gameFeed.value?.close();
-  gameFeed.value = null;
-  gameFeedStatus.value = "disconnected";
-};
-
-/* -------------------------------------------------------------------------- */
-/* Player queue WebSocket                                                     */
-/* -------------------------------------------------------------------------- */
-
-const queueSocket = shallowRef<WebSocket | null>(null);
-const queueStatus = ref<ConnectionStatus>("disconnected");
-
-const confirmationRequest = ref(false);
-const stillNeedsResponse = ref(false);
-const confirmationPassword = ref("");
-
-const joinQueue = () => {
-  if (!import.meta.client) {
-    return;
-  }
-
-  if (!isLoggedIn.value) {
-    window.alert("Log in before joining the queue.");
-    return;
-  }
-
-  if (isInGame.value) {
-    window.alert("You are already in a match.");
-    return;
-  }
-
-  if (
-    queueSocket.value &&
-    (queueSocket.value.readyState === WebSocket.OPEN ||
-      queueSocket.value.readyState === WebSocket.CONNECTING)
-  ) {
-    return;
-  }
-
-  try {
-    queueStatus.value = "connecting";
-
-    const socket = new WebSocket(
-      createWebSocketUrl(config.public.PORT_CLIENT_GM),
-    );
-
-    queueSocket.value = socket;
-
-    socket.onopen = () => {
-      queueStatus.value = "connected";
-
-      socket.send(
-        JSON.stringify({
-          type: "JOIN_QUEUE",
-          payload: "",
-        }),
-      );
-    };
-
-    socket.onerror = (event) => {
-      console.error("Queue WebSocket error:", event);
-      queueStatus.value = "error";
-    };
-
-    socket.onclose = () => {
-      if (queueSocket.value === socket) {
-        queueSocket.value = null;
-      }
-
-      queueStatus.value = "disconnected";
-    };
-
-    socket.onmessage = async (event) => {
-      const message = parseMessage(event.data);
-
-      if (!message?.type) {
-        return;
-      }
-
-      switch (message.type) {
-        case "MATCH_CONFIRMATION": {
-          if (typeof message.payload !== "string") {
-            return;
-          }
-
-          confirmationPassword.value = message.payload;
-          confirmationRequest.value = true;
-          stillNeedsResponse.value = true;
-          break;
-        }
-
-        case "MATCH_CONFIRMATION_RESET": {
-          confirmationRequest.value = false;
-          stillNeedsResponse.value = false;
-          confirmationPassword.value = "";
-          break;
-        }
-
-        case "MATCH_START": {
-          if (typeof message.payload !== "string") {
-            return;
-          }
-
-          confirmationRequest.value = false;
-          stillNeedsResponse.value = false;
-          confirmationPassword.value = "";
-
-          accessPassword.value = message.payload;
-          isInGame.value = true;
-
-          await nextTick();
-          connectController();
-          break;
-        }
-      }
-    };
-  } catch (error) {
-    console.error("Failed to connect to the queue:", error);
-    queueStatus.value = "error";
-  }
-};
-
-const leaveQueue = () => {
-  const socket = queueSocket.value;
-
-  if (!socket) {
-    queueStatus.value = "disconnected";
-    return;
-  }
-
-  if (socket.readyState === WebSocket.OPEN) {
-    socket.send(
-      JSON.stringify({
-        type: "LEAVE_QUEUE",
-        payload: "",
-      }),
-    );
-  }
-
-  /*
-   * Game Manager closes the socket after LEAVE_QUEUE. Closing locally as well
-   * makes the UI update immediately.
-   */
-  window.setTimeout(() => {
-    if (
-      socket.readyState === WebSocket.OPEN ||
-      socket.readyState === WebSocket.CONNECTING
-    ) {
-      socket.close();
-    }
-  }, 100);
-};
-
-const disconnectQueue = (notifyServer = false) => {
-  const socket = queueSocket.value;
-
-  if (!socket) {
-    queueStatus.value = "disconnected";
-    return;
-  }
-
-  if (notifyServer && socket.readyState === WebSocket.OPEN) {
-    socket.send(
-      JSON.stringify({
-        type: "LEAVE_QUEUE",
-        payload: "",
-      }),
-    );
-  }
-
-  socket.close();
-  queueSocket.value = null;
-  queueStatus.value = "disconnected";
-
-  confirmationRequest.value = false;
-  stillNeedsResponse.value = false;
-  confirmationPassword.value = "";
-};
-
-const confirmMatch = (accepted: boolean) => {
-  stillNeedsResponse.value = false;
-  confirmationRequest.value = false;
-
-  const socket = queueSocket.value;
-
-  if (socket?.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  socket.send(
-    JSON.stringify({
-      type: "CONFIRMATION",
-      payload: {
-        password: confirmationPassword.value,
-        accepted,
-      },
-    }),
-  );
 };
 
 /* -------------------------------------------------------------------------- */
@@ -927,16 +582,63 @@ const disconnectController = () => {
 
   controllerSocket.value?.close();
   controllerSocket.value = null;
-  controllerStatus.value = "disconnected";
+
+  controllerStatus.value =
+    "disconnected";
 };
 
 const endGame = () => {
   isInGame.value = false;
-  hasSeenPositiveTimer.value = false;
   accessPassword.value = null;
 
   disconnectController();
 };
+
+const handleMatchStart = async (
+  password: string,
+) => {
+  accessPassword.value = password;
+
+  isInGame.value = true;
+
+  await nextTick();
+
+  connectController();
+};
+
+/* -------------------------------------------------------------------------- */
+/* Match queue                                                                */
+/* -------------------------------------------------------------------------- */
+
+const {
+  queueStatus,
+  confirmationRequest,
+  stillNeedsResponse,
+  joinQueue,
+  leaveQueue,
+  disconnectQueue,
+  confirmMatch,
+} = useMatchQueue({
+  isLoggedIn,
+  isInGame,
+  onMatchStart: handleMatchStart,
+});
+
+/* -------------------------------------------------------------------------- */
+/* Public game feed                                                           */
+/* -------------------------------------------------------------------------- */
+const {
+  queue,
+  timer,
+  player1,
+  player2,
+  gameFeedStatus,
+  connectGameFeed,
+  disconnectGameFeed,
+} = useGameFeed({
+  isInGame,
+  onGameEnd: endGame,
+});
 
 const controlKeyClass = (key: ControlKey) => {
   if (keyState[key] === 1) {

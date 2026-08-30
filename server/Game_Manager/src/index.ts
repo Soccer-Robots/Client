@@ -34,8 +34,9 @@ let score2: number = 5
 enum GAME_STATE { NOT_PLAYING, SEND_CONFIRM, PLAYING, RESETTING }
 let game_state: GAME_STATE = GAME_STATE.NOT_PLAYING
 
-let robots_ready: boolean = false
-let numPlayers: number = 1
+// let robots_ready: boolean = false
+let robots_ready: boolean = true // for testing purposes, set to true. Change to false when testing with actual robots
+let numPlayers: number = 1 // for now, only 1v1 is supported. Change to 2 for 2v2, etc. This is set in the match settings in the database.
 
 // Match Settings
 const matchSettings = async () => {
