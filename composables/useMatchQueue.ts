@@ -1,12 +1,6 @@
-import {
-  ref,
-  shallowRef,
-} from "vue";
+import { ref, shallowRef } from "vue";
 
-import type {
-  Ref,
-  ComputedRef,
-} from "vue";
+import type { Ref, ComputedRef } from "vue";
 
 export type QueueConnectionStatus =
   | "disconnected"
@@ -24,74 +18,47 @@ interface UseMatchQueueOptions {
   isLoggedIn: ComputedRef<boolean>;
   isInGame: Ref<boolean>;
 
-  onMatchStart: (
-    accessPassword: string,
-  ) => void | Promise<void>;
+  onMatchStart: (accessPassword: string) => void | Promise<void>;
 }
 
-export const useMatchQueue = (
-  options: UseMatchQueueOptions,
-) => {
+export const useMatchQueue = (options: UseMatchQueueOptions) => {
   const config = useRuntimeConfig();
 
   // --------------------------------------------------------------------------
   // Queue state
   // --------------------------------------------------------------------------
 
-  const queueSocket =
-    shallowRef<WebSocket | null>(null);
+  const queueSocket = shallowRef<WebSocket | null>(null);
 
-  const queueStatus =
-    ref<QueueConnectionStatus>(
-      "disconnected",
-    );
+  const queueStatus = ref<QueueConnectionStatus>("disconnected");
 
   // --------------------------------------------------------------------------
   // Match confirmation state
   // --------------------------------------------------------------------------
 
-  const confirmationRequest =
-    ref(false);
+  const confirmationRequest = ref(false);
 
-  const stillNeedsResponse =
-    ref(false);
+  const stillNeedsResponse = ref(false);
 
-  const confirmationPassword =
-    ref("");
+  const confirmationPassword = ref("");
 
   // --------------------------------------------------------------------------
   // Service URL
   // --------------------------------------------------------------------------
 
-  const createWebSocketUrl = (
-    port: unknown,
-  ) => {
+  const createWebSocketUrl = (port: unknown) => {
     if (!import.meta.client) {
       return "";
     }
 
-    const configuredHost = String(
-      config.public.LOCALHOST ||
-        "localhost",
-    );
+    const configuredHost = String(config.public.LOCALHOST || "localhost");
 
-    const serviceHost =
-      configuredHost
-        .replace(
-          /^https?:\/\//,
-          "",
-        )
-        .replace(
-          /^wss?:\/\//,
-          "",
-        )
-        .replace(/\/.*$/, "");
+    const serviceHost = configuredHost
+      .replace(/^https?:\/\//, "")
+      .replace(/^wss?:\/\//, "")
+      .replace(/\/.*$/, "");
 
-    const protocol =
-      window.location.protocol ===
-      "https:"
-        ? "wss"
-        : "ws";
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
 
     return `${protocol}://${serviceHost}:${String(port)}`;
   };
@@ -100,24 +67,15 @@ export const useMatchQueue = (
   // Message parsing
   // --------------------------------------------------------------------------
 
-  const parseMessage = (
-    value: unknown,
-  ): SocketMessage | null => {
-    if (
-      typeof value !== "string"
-    ) {
+  const parseMessage = (value: unknown): SocketMessage | null => {
+    if (typeof value !== "string") {
       return null;
     }
 
     try {
-      const parsed =
-        JSON.parse(value);
+      const parsed = JSON.parse(value);
 
-      if (
-        !parsed ||
-        typeof parsed !==
-          "object"
-      ) {
+      if (!parsed || typeof parsed !== "object") {
         return null;
       }
 
@@ -137,14 +95,11 @@ export const useMatchQueue = (
   // --------------------------------------------------------------------------
 
   const resetConfirmation = () => {
-    confirmationRequest.value =
-      false;
+    confirmationRequest.value = false;
 
-    stillNeedsResponse.value =
-      false;
+    stillNeedsResponse.value = false;
 
-    confirmationPassword.value =
-      "";
+    confirmationPassword.value = "";
   };
 
   // --------------------------------------------------------------------------
@@ -156,20 +111,14 @@ export const useMatchQueue = (
       return;
     }
 
-    if (
-      !options.isLoggedIn.value
-    ) {
-      window.alert(
-        "Log in before joining the queue.",
-      );
+    if (!options.isLoggedIn.value) {
+      window.alert("Log in before joining the queue.");
 
       return;
     }
 
     if (options.isInGame.value) {
-      window.alert(
-        "You are already in a match.",
-      );
+      window.alert("You are already in a match.");
 
       return;
     }
@@ -180,40 +129,27 @@ export const useMatchQueue = (
      */
     if (
       queueSocket.value &&
-      (
-        queueSocket.value
-          .readyState ===
-          WebSocket.OPEN ||
-        queueSocket.value
-          .readyState ===
-          WebSocket.CONNECTING
-      )
+      (queueSocket.value.readyState === WebSocket.OPEN ||
+        queueSocket.value.readyState === WebSocket.CONNECTING)
     ) {
       return;
     }
 
     try {
-      queueStatus.value =
-        "connecting";
+      queueStatus.value = "connecting";
 
-      const socket =
-        new WebSocket(
-          createWebSocketUrl(
-            config.public
-              .PORT_CLIENT_GM,
-          ),
-        );
+      const socket = new WebSocket(
+        createWebSocketUrl(config.public.PORT_CLIENT_GM),
+      );
 
-      queueSocket.value =
-        socket;
+      queueSocket.value = socket;
 
       // --------------------------------------------------
       // Connected
       // --------------------------------------------------
 
       socket.onopen = () => {
-        queueStatus.value =
-          "connected";
+        queueStatus.value = "connected";
 
         socket.send(
           JSON.stringify({
@@ -227,16 +163,10 @@ export const useMatchQueue = (
       // Error
       // --------------------------------------------------
 
-      socket.onerror = (
-        event,
-      ) => {
-        console.error(
-          "Queue WebSocket error:",
-          event,
-        );
+      socket.onerror = (event) => {
+        console.error("Queue WebSocket error:", event);
 
-        queueStatus.value =
-          "error";
+        queueStatus.value = "error";
       };
 
       // --------------------------------------------------
@@ -248,31 +178,27 @@ export const useMatchQueue = (
          * Make sure an old socket
          * doesn't clear a newer one.
          */
-        if (
-          queueSocket.value ===
-          socket
-        ) {
-          queueSocket.value =
-            null;
+        if (queueSocket.value === socket) {
+          queueSocket.value = null;
         }
 
-        queueStatus.value =
-          "disconnected";
+        queueStatus.value = "disconnected";
       };
 
       // --------------------------------------------------
       // Messages
       // --------------------------------------------------
 
-      socket.onmessage = async (
-        event,
-      ) => {
-        const message =
-          parseMessage(
-            event.data,
-          );
+      socket.onmessage = async (event) => {
+        console.log("[QUEUE] RAW MESSAGE:", event.data);
+
+        const message = parseMessage(event.data);
+
+        console.log("[QUEUE] PARSED MESSAGE:", message);
 
         if (!message?.type) {
+          console.log("[QUEUE] Message had no JSON type");
+
           return;
         }
 
@@ -282,21 +208,28 @@ export const useMatchQueue = (
           // ----------------------------------------------
 
           case "MATCH_CONFIRMATION": {
-            if (
-              typeof message.payload !==
-              "string"
-            ) {
+            console.log(
+              "[QUEUE] MATCH_CONFIRMATION received:",
+              message.payload,
+            );
+
+            if (typeof message.payload !== "string") {
+              console.log("[QUEUE] Invalid confirmation payload");
+
               return;
             }
 
-            confirmationPassword.value =
-              message.payload;
+            confirmationPassword.value = message.payload;
 
-            confirmationRequest.value =
-              true;
+            confirmationRequest.value = true;
 
-            stillNeedsResponse.value =
-              true;
+            stillNeedsResponse.value = true;
+
+            console.log("[QUEUE] Confirmation state:", {
+              confirmationRequest: confirmationRequest.value,
+
+              stillNeedsResponse: stillNeedsResponse.value,
+            });
 
             break;
           }
@@ -316,31 +249,22 @@ export const useMatchQueue = (
           // ----------------------------------------------
 
           case "MATCH_START": {
-            if (
-              typeof message.payload !==
-              "string"
-            ) {
+            if (typeof message.payload !== "string") {
               return;
             }
 
             resetConfirmation();
 
-            await options.onMatchStart(
-              message.payload,
-            );
+            await options.onMatchStart(message.payload);
 
             break;
           }
         }
       };
     } catch (error) {
-      console.error(
-        "Failed to connect to the queue:",
-        error,
-      );
+      console.error("Failed to connect to the queue:", error);
 
-      queueStatus.value =
-        "error";
+      queueStatus.value = "error";
     }
   };
 
@@ -349,20 +273,15 @@ export const useMatchQueue = (
   // --------------------------------------------------------------------------
 
   const leaveQueue = () => {
-    const socket =
-      queueSocket.value;
+    const socket = queueSocket.value;
 
     if (!socket) {
-      queueStatus.value =
-        "disconnected";
+      queueStatus.value = "disconnected";
 
       return;
     }
 
-    if (
-      socket.readyState ===
-      WebSocket.OPEN
-    ) {
+    if (socket.readyState === WebSocket.OPEN) {
       socket.send(
         JSON.stringify({
           type: "LEAVE_QUEUE",
@@ -382,10 +301,8 @@ export const useMatchQueue = (
      */
     window.setTimeout(() => {
       if (
-        socket.readyState ===
-          WebSocket.OPEN ||
-        socket.readyState ===
-          WebSocket.CONNECTING
+        socket.readyState === WebSocket.OPEN ||
+        socket.readyState === WebSocket.CONNECTING
       ) {
         socket.close();
       }
@@ -396,26 +313,18 @@ export const useMatchQueue = (
   // Force disconnect
   // --------------------------------------------------------------------------
 
-  const disconnectQueue = (
-    notifyServer = false,
-  ) => {
-    const socket =
-      queueSocket.value;
+  const disconnectQueue = (notifyServer = false) => {
+    const socket = queueSocket.value;
 
     if (!socket) {
-      queueStatus.value =
-        "disconnected";
+      queueStatus.value = "disconnected";
 
       resetConfirmation();
 
       return;
     }
 
-    if (
-      notifyServer &&
-      socket.readyState ===
-        WebSocket.OPEN
-    ) {
+    if (notifyServer && socket.readyState === WebSocket.OPEN) {
       socket.send(
         JSON.stringify({
           type: "LEAVE_QUEUE",
@@ -428,8 +337,7 @@ export const useMatchQueue = (
 
     queueSocket.value = null;
 
-    queueStatus.value =
-      "disconnected";
+    queueStatus.value = "disconnected";
 
     resetConfirmation();
   };
@@ -438,22 +346,14 @@ export const useMatchQueue = (
   // Respond to match confirmation
   // --------------------------------------------------------------------------
 
-  const confirmMatch = (
-    accepted: boolean,
-  ) => {
-    stillNeedsResponse.value =
-      false;
+  const confirmMatch = (accepted: boolean) => {
+    stillNeedsResponse.value = false;
 
-    confirmationRequest.value =
-      false;
+    confirmationRequest.value = false;
 
-    const socket =
-      queueSocket.value;
+    const socket = queueSocket.value;
 
-    if (
-      socket?.readyState !==
-      WebSocket.OPEN
-    ) {
+    if (socket?.readyState !== WebSocket.OPEN) {
       return;
     }
 
@@ -462,8 +362,7 @@ export const useMatchQueue = (
         type: "CONFIRMATION",
 
         payload: {
-          password:
-            confirmationPassword.value,
+          password: confirmationPassword.value,
 
           accepted,
         },

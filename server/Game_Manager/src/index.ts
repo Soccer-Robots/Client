@@ -79,14 +79,6 @@ const gameCycle = setInterval(async () => {
     // Check for sufficient users in queue to send confirmation request
     await matchSettings();
 
-    console.log("[GAME CYCLE]", {
-      gameState: GAME_STATE[game_state],
-      queueLength: queue.length,
-      numPlayers,
-      requiredPlayers: numPlayers * 2,
-      robotsReady: robots_ready,
-    });
-
     if (queue.length == numPlayers * 2) {
       if (robots_ready) {
         // robots are ready to play
@@ -104,28 +96,28 @@ const gameCycle = setInterval(async () => {
         });
 
         for (let i = 0; i < numPlayers; i++) {
-  console.log(
-    `[MATCH] Sending confirmation to ${queue[i * 2].username}`,
-  );
+          console.log(
+            `[MATCH] Sending confirmation to ${queue[i * 2].username}`,
+          );
 
-  queue[i * 2].ws.send(
-    JSON.stringify({
-      type: "MATCH_CONFIRMATION",
-      payload: CONFIRMATION_PASSWORD,
-    }),
-  );
+          queue[i * 2].ws.send(
+            JSON.stringify({
+              type: "MATCH_CONFIRMATION",
+              payload: CONFIRMATION_PASSWORD,
+            }),
+          );
 
-  console.log(
-    `[MATCH] Sending confirmation to ${queue[i * 2 + 1].username}`,
-  );
+          console.log(
+            `[MATCH] Sending confirmation to ${queue[i * 2 + 1].username}`,
+          );
 
-  queue[i * 2 + 1].ws.send(
-    JSON.stringify({
-      type: "MATCH_CONFIRMATION",
-      payload: CONFIRMATION_PASSWORD,
-    }),
-  );
-}
+          queue[i * 2 + 1].ws.send(
+            JSON.stringify({
+              type: "MATCH_CONFIRMATION",
+              payload: CONFIRMATION_PASSWORD,
+            }),
+          );
+        }
         confirmation_timer = confirmation_timer_duration;
       } else {
         // ask if robots are ready to play
