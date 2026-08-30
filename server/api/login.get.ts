@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client"
-import { nanoid } from "nanoid"
-import { getQuery, setCookie, defineEventHandler, sendRedirect } from "h3"
-import fs from "fs";
+import { PrismaClient } from "@prisma/client";
+import { getQuery, setCookie, defineEventHandler, createError} from "h3";
 import jwt from "jsonwebtoken";
 
 
@@ -31,9 +29,17 @@ export default defineEventHandler(async (event) => {
       statusMessage: "Invalid or expired magic link"
     })
   }
+  if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET is not defined in environment variables.")
 
-  // Generate permanent session token
-  const payload = { id: player.user_id }
+    throw createError({
+      statusCode: 500,
+      statusMessage: "Server configuration error"
+    })
+  }
+
+// Generate permanent session token
+const payload = { id: player.user_id }
 
 const sessionToken = jwt.sign(
     payload,
@@ -66,16 +72,31 @@ const sessionToken = jwt.sign(
 
   console.log(`Set srtoken cookie for player ${player.username}.`)
   // Set username cookie
-  setCookie(event, "sruser", player.username, {
-  path: "/",
-  maxAge: 60 * 60 * 24 * 30,
-  sameSite: "lax",
-  secure: false
-})
+  setCookie(
+  event,
+  "sruser",
+  JSON.stringify({
+    username: player.username,
+    role: player.role,
+  }),
+  {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+    sameSite: "lax",
+    secure: false,
+  },
+);
 
 console.log(`Set sruser cookie for player ${player.username}.`) 
 
 
   // Redirect to player page
-  return sendRedirect(event, "/game")
+  return {
+    success: true,
+    user: {
+      username: player.username,
+      role: player.role,
+      user_id: player.user_id
+    }
+  }
 })

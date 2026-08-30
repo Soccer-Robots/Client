@@ -1,99 +1,111 @@
-<!--creates the scoreboard for the current ongoing match.-->
-
 <template>
-  <div class="border-4 rounded-lg border-black dark:bg-[#C0C0C0] flex justify-between items-center overflow-hidden scoreboard">
-    <!--holds user one's score here.-->
-    <p class="border-r-4 border-black rounded-lg bg-orange text-center score-box">{{ user1score }}</p>
-    <!--holds user one's name.-->
-    <p class="grow text-center player-name">{{ user1 }}</p>
-    <!--holds the timer for how much time is left in the match.-->
+  <section
+    class="overflow-hidden rounded-2xl border border-white/10 bg-white/10 shadow-xl backdrop-blur-sm"
+  >
+    <div class="grid grid-cols-[1fr_auto_1fr] items-stretch">
+      <!-- Orange Team -->
+      <div
+        class="flex min-w-0 items-center justify-between gap-4 border-r border-white/10 px-5 py-4 sm:px-8"
+      >
+        <div class="min-w-0">
+          <p
+            class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300"
+          >
+            Orange
+          </p>
 
-    <div class="bg-slate-300 dark:bg-black border-black dark:border-[#ffffff] border-l-4 border-r-4 flex items-center timer-box">
-      <p class="timer-text dark:text-[#ffffff]">{{ formatTimer }}</p>
+          <h2
+            class="mt-1 truncate text-lg font-black sm:text-2xl"
+          >
+            {{ orangeTeamName }}
+          </h2>
+        </div>
+
+        <div
+          class="flex h-16 min-w-16 items-center justify-center rounded-xl bg-[#E87500] px-4 text-4xl font-black text-white sm:h-20 sm:min-w-20 sm:text-5xl"
+        >
+          {{ orangeScore }}
+        </div>
+      </div>
+
+      <!-- Timer -->
+      <div
+        class="flex min-w-[105px] flex-col items-center justify-center bg-black/20 px-4 py-3 sm:min-w-[140px]"
+      >
+        <p
+          class="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 sm:text-xs"
+        >
+          Time
+        </p>
+
+        <p
+          class="mt-1 font-mono text-2xl font-black tabular-nums sm:text-3xl"
+        >
+          {{ formattedTime }}
+        </p>
+      </div>
+
+      <!-- Green Team -->
+      <div
+        class="flex min-w-0 items-center justify-between gap-4 border-l border-white/10 px-5 py-4 sm:px-8"
+      >
+        <div
+          class="flex h-16 min-w-16 items-center justify-center rounded-xl bg-[#5FE0B7] px-4 text-4xl font-black text-[#154734] sm:h-20 sm:min-w-20 sm:text-5xl"
+        >
+          {{ greenScore }}
+        </div>
+
+        <div class="min-w-0 text-right">
+          <p
+            class="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300"
+          >
+            Green
+          </p>
+
+          <h2
+            class="mt-1 truncate text-lg font-black sm:text-2xl"
+          >
+            {{ greenTeamName }}
+          </h2>
+        </div>
+      </div>
     </div>
-    <!--Holds user two's name here.-->
-    <p class="grow text-center player-name">{{ user2 }}</p>
-    <!--holds user two's score here.-->
-    <p class="border-l-4 border-black rounded-lg bg-green text-center score-box">{{ user2score }}</p>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-//the parent component of this is the index.vue file, passes in both usernames, timer, and both scores.
 import { computed } from "vue";
 
-const props = defineProps({
-  queue: { type: Array as () => string[], default: () => [] },
-  user1: { type: String, default: "" },
-  user2: { type: String, default: "" },
-  timer: { type: Number, default: 97 },
-  user1score: { type: Number, default: 0 },
-  user2score: { type: Number, default: 0 },
+const props = withDefaults(
+  defineProps<{
+    orangeScore?: number;
+    greenScore?: number;
+    timeRemaining?: number;
+    orangeTeamName?: string;
+    greenTeamName?: string;
+  }>(),
+  {
+    orangeScore: 0,
+    greenScore: 0,
+    timeRemaining: 0,
+    orangeTeamName: "Orange Team",
+    greenTeamName: "Green Team",
+  },
+);
+
+const formattedTime = computed(() => {
+  const totalSeconds = Math.max(
+    0,
+    Math.floor(props.timeRemaining),
+  );
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes
+    .toString()
+    .padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
 });
-
-const user1 = computed(() => props.queue[0] || "TBD");
-const user2 = computed(() => props.queue[1] || "TBD");
-
-//formats the timer to be displayed on the screen. Currently props.timer is just in seconds.
-const formatTimer = computed(() => {
-  //Divide timer by 60 to get time left.
-  const minutes: number = Math.floor(props.timer / 60);
-  //get remaining time after time per minute.
-  const seconds: number = props.timer % 60;
-  //convert the minutes and secnods to a string. Format is minutes:seconds, with padding of 3 digits total for minutes remaining and seconds remaining.
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-})
 </script>
-<style scoped>
-
-@import url('https://fonts.googleapis.com/css2?family=Jockey+One&family=Source+Code+Pro:ital,wght@0,700;1,700&display=swap');
-
-.scoreboard {
-  width: 69vw;
-  height: 9vh;
-  margin: 0 auto;
-  margin-right: 2rem ;
-  margin-left: 2rem ;
-}
-
-.score-box {
-  font-family: 'Jockey One', sans-serif;
-  font-weight: 400;
-  font-size: 5vw;
-  min-width: 10vw;
-  padding: 0.5vw;
-}
-
-.bg-orange {
-  background-color: #E87500;
-}
-
-.bg-green {
-  background-color: #5FE0B7;
-}
-
-.player-name {
-  font-family: Helvetica, sans-serif;
-  font-weight: bold;
-  font-size: 2vw;
-}
-
-.timer-box {
-  border-radius: 10px;
-  border-width: 5px;
-  padding: 0.5vw;
-  width: 5.5vw;
-  height: 5vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: C0C0C0;
-}
-
-.timer-text {
-  font-family: 'Jockey One', sans-serif;
-  font-weight: bold;
-  font-size: 2vw;
-}
-
-</style>

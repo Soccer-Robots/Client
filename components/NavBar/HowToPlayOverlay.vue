@@ -1,6 +1,6 @@
 <!--overlay of the how to play mini-page-->
 <template>
-    <div class="overlay fixed w-full h-full inset-0 bg-opacity-20 backdrop-blur-sm flex ">
+    <div class="overlay fixed w-full h-full inset-0 bg-opacity-20 backdrop-blur-sm flex text-black ">
       <div class="content rounded-lg p-4 bg-white border-2 border-black ">
         <div class="top-content">
           <div class="title-container">
