@@ -17,7 +17,7 @@
       @open-admin="showAdminPanel = true"
       @open-change-username="showChangeUsername = true"
       @toggle-theme="toggleTheme"
-      @login="goToLogin"
+      @login="openLoginPopup"
       @logout="logout"
     />
 
@@ -228,15 +228,10 @@
 
             <button
               type="button"
-              :disabled="isRequestingLogin"
-              class="mt-6 w-full rounded-xl bg-[#f96c00] px-5 py-3 font-bold transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-              @click="goToLogin"
+              class="mt-6 w-full rounded-xl bg-[#f96c00] px-5 py-3 font-bold transition hover:bg-orange-500"
+              @click="openLoginPopup"
             >
-              {{
-                isRequestingLogin
-                  ? "Sending login link..."
-                  : "Log In to Join Queue"
-              }}
+            Log In to Join Queue
             </button>
           </div>
         </aside>
@@ -244,6 +239,14 @@
     </main>
 
     <!-- Existing project overlays -->
+     <LoginRequestOverlay
+  v-if="showLoginRequest"
+  :is-submitting="isRequestingLogin"
+  :success="loginRequestSuccess"
+  :error-message="loginRequestError"
+  @submit="requestLogin"
+  @close="closeLoginPopup"
+/>
     <ConfirmMatchOverlay
       v-if="confirmationRequest && stillNeedsResponse"
       @confirm-response="confirmMatch"
@@ -376,34 +379,53 @@ const isAdmin = computed(() => currentUser.value?.role === "admin");
 const isRequestingLogin = ref(false);
 const isLoggingOut = ref(false);
 
-const goToLogin = async () => {
-  if (!import.meta.client) {
+const showLoginRequest = ref(false);
+const loginRequestSuccess = ref(false);
+const loginRequestError = ref("");
+
+const openLoginPopup = () => {
+  loginRequestSuccess.value = false;
+  loginRequestError.value = "";
+
+  showLoginRequest.value = true;
+};
+
+const closeLoginPopup = () => {
+  if (isRequestingLogin.value) {
     return;
   }
 
-  const email = window.prompt("Please enter your email address:");
+  showLoginRequest.value = false;
+  loginRequestSuccess.value = false;
+  loginRequestError.value = "";
+};
 
-  if (!email?.trim()) {
-    window.alert("Email is required to log in.");
+const requestLogin = async (email: string) => {
+  if (isRequestingLogin.value) {
     return;
   }
 
   isRequestingLogin.value = true;
+  loginRequestError.value = "";
 
   try {
     await $fetch("/api/login-request", {
       method: "POST",
+
       body: {
-        email: email.trim().toLowerCase(),
+        email,
       },
     });
 
-    window.alert(
-      "Login link sent! Check your email or the server terminal.",
-    );
+    loginRequestSuccess.value = true;
   } catch (error) {
-    console.error("Error requesting login link:", error);
-    window.alert("Failed to send the login link. Please try again.");
+    console.error(
+      "Error requesting login link:",
+      error,
+    );
+
+    loginRequestError.value =
+      "Failed to send the login link. Please try again.";
   } finally {
     isRequestingLogin.value = false;
   }
