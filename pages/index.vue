@@ -33,14 +33,16 @@
 
       <!-- SECTION 3: Sidebar -->
       <GameSidebar
-        :queue="queue"
-        :theme="theme"
-        :is-logged-in="isLoggedIn"
-        :is-in-game="isInGame"
-        @join-queue="joinQueue"
-        @leave-queue="leaveQueue"
-        @login="openLoginPopup"
-      />
+  :queue="queue"
+  :player-name="playerName"
+  :is-logged-in="isLoggedIn"
+  :is-in-game="isInGame"
+  :queue-status="queueStatus"
+  :leaderboard="leaderboard"
+  @join-queue="joinQueue"
+  @leave-queue="leaveQueue"
+  @login="openLoginPopup"
+/>
     </div>
   </div>
 </main>
@@ -78,6 +80,30 @@ import {
   shallowRef,
   watch,
 } from "vue";
+
+const leaderboard = ref([
+  {
+    username: "OrangeRobot",
+    wins: 12,
+    losses: 3,
+    goals: 31,
+    gamesPlayed: 15,
+  },
+  {
+    username: "GreenMachine",
+    wins: 9,
+    losses: 5,
+    goals: 24,
+    gamesPlayed: 14,
+  },
+  {
+    username: "SoccerBot",
+    wins: 7,
+    losses: 4,
+    goals: 19,
+    gamesPlayed: 11,
+  },
+]);
 
 type Theme = "light" | "dark";
 
