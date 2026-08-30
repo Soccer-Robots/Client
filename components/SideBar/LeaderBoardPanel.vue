@@ -234,9 +234,9 @@ const sortOptions: {
   },
 ];
 
-const rankedPlayers = computed(() => {
-  return props.players;
-});
+const rankedPlayers = computed(
+  () =>  props.players,
+);
 
 const displayedStatLabel = computed(() => {
   switch (sortBy.value) {
