@@ -1,70 +1,101 @@
 <template>
-  <div class="min-h-screen bg-[#154734] text-white transition-colors dark:bg-[#222222]">
+  <div
+    class="min-h-screen bg-[#154734] text-white transition-colors dark:bg-[#222222]"
+  >
     <!-- Navigation -->
-    <NavBar :is-logged-in="isLoggedIn" :is-admin="isAdmin" :player-name="playerName" :theme="theme"
-      :is-requesting-login="isRequestingLogin" :is-logging-out="isLoggingOut" @open-about="showAbout = true"
-      @open-how-to-play="showHowToPlay = true" @open-help="showHelp = true" @open-leaderboard="showLeaderboard = true"
-      @open-admin="showAdminPanel = true" @open-change-username="showChangeUsername = true" @toggle-theme="toggleTheme"
-      @login="openLoginPopup" @logout="logout" />
-
-    <!-- Main game page -->
-    <main
-  class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:py-8"
->
-  <div class="space-y-6">
-    <!-- SECTION 1: Scoreboard -->
-    <Scoreboard
-      :orange-score="player1.score"
-      :green-score="player2.score"
-      :time-remaining="timer"
-      orange-team-name="Orange Team"
-      green-team-name="Green Team"
+    <NavBar
+      :is-logged-in="isLoggedIn"
+      :is-admin="isAdmin"
+      :player-name="playerName"
+      :theme="theme"
+      :is-requesting-login="isRequestingLogin"
+      :is-logging-out="isLoggingOut"
+      @open-about="showAbout = true"
+      @open-how-to-play="showHowToPlay = true"
+      @open-help="showHelp = true"
+      @open-leaderboard="showLeaderboard = true"
+      @open-admin="showAdminPanel = true"
+      @open-change-username="showChangeUsername = true"
+      @toggle-theme="toggleTheme"
+      @login="openLoginPopup"
+      @logout="logout"
     />
 
-    <!-- Main lower layout -->
-    <div
-      class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
-    >
-      <!-- SECTION 2: Game View -->
-      <GameView
-        :stream-type="streamType"
-        :is-in-game="isInGame"
-      />
+    <!-- Main game page -->
+    <main class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:py-8">
+      <div class="space-y-6">
+        <!-- SECTION 1: Scoreboard -->
+        <Scoreboard
+          :orange-score="player1.score"
+          :green-score="player2.score"
+          :time-remaining="timer"
+          orange-team-name="Orange Team"
+          green-team-name="Green Team"
+        />
 
-      <!-- SECTION 3: Sidebar -->
-      <GameSidebar
-  :queue="queue"
-  :player-name="playerName"
-  :is-logged-in="isLoggedIn"
-  :is-in-game="isInGame"
-  :queue-status="queueStatus"
-  :leaderboard="leaderboard"
-  @join-queue="joinQueue"
-  @leave-queue="leaveQueue"
-  @login="openLoginPopup"
-/>
-    </div>
-  </div>
-</main>
+        <!-- Main lower layout -->
+        <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <!-- SECTION 2: Game View -->
+          <GameView :stream-type="streamType" :is-in-game="isInGame" />
+
+          <!-- SECTION 3: Sidebar -->
+          <GameSidebar
+            :queue="queue"
+            :player-name="playerName"
+            :is-logged-in="isLoggedIn"
+            :is-in-game="isInGame"
+            :queue-status="queueStatus"
+            :leaderboard="leaderboard"
+            @join-queue="joinQueue"
+            @leave-queue="leaveQueue"
+            @login="openLoginPopup"
+          />
+        </div>
+      </div>
+    </main>
 
     <!-- Existing project overlays -->
-    <LoginRequestOverlay v-if="showLoginRequest" :is-submitting="isRequestingLogin" :success="loginRequestSuccess"
-      :error-message="loginRequestError" @submit="requestLogin" @close="closeLoginPopup" />
-    <ConfirmMatchOverlay v-if="confirmationRequest && stillNeedsResponse" @confirm-response="confirmMatch" />
+    <LoginRequestOverlay
+      v-if="showLoginRequest"
+      :is-submitting="isRequestingLogin"
+      :success="loginRequestSuccess"
+      :error-message="loginRequestError"
+      @submit="requestLogin"
+      @close="closeLoginPopup"
+    />
+    <ConfirmMatchOverlay
+      v-if="confirmationRequest && stillNeedsResponse"
+      @confirm-response="confirmMatch"
+    />
 
     <HelpOverlay v-if="showHelp" @close-help-overlay="showHelp = false" />
 
-    <AboutUsOverlay v-if="showAbout" @close-about-us-overlay="showAbout = false" />
+    <AboutUsOverlay
+      v-if="showAbout"
+      @close-about-us-overlay="showAbout = false"
+    />
 
-    <HowToPlayOverlay v-if="showHowToPlay" @close-how-to-play-overlay="showHowToPlay = false" />
+    <HowToPlayOverlay
+      v-if="showHowToPlay"
+      @close-how-to-play-overlay="showHowToPlay = false"
+    />
 
-    <LeaderBoardOverlay v-if="showLeaderboard" @close-leader-board-overlay="showLeaderboard = false" />
+    <LeaderBoardOverlay
+      v-if="showLeaderboard"
+      @close-leader-board-overlay="showLeaderboard = false"
+    />
 
-    <LogInOverlay v-if="showChangeUsername && isLoggedIn" :is-changing-username="true"
-      @close-log-in="showChangeUsername = false" />
+    <LogInOverlay
+      v-if="showChangeUsername && isLoggedIn"
+      :is-changing-username="true"
+      @close-log-in="showChangeUsername = false"
+    />
 
     <ClientOnly>
-      <AdminPanel v-if="showAdminPanel && isAdmin" @close-admin-panel="showAdminPanel = false" />
+      <AdminPanel
+        v-if="showAdminPanel && isAdmin"
+        @close-admin-panel="showAdminPanel = false"
+      />
     </ClientOnly>
   </div>
 </template>
@@ -80,7 +111,6 @@ import {
   shallowRef,
   watch,
 } from "vue";
-
 const leaderboard = ref([
   {
     username: "OrangeRobot",
