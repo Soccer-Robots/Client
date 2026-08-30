@@ -1,288 +1,68 @@
 <template>
-  <div
-    class="min-h-screen bg-[#154734] text-white transition-colors dark:bg-[#222222]"
-  >
+  <div class="min-h-screen bg-[#154734] text-white transition-colors dark:bg-[#222222]">
     <!-- Navigation -->
-    <NavBar
-      :is-logged-in="isLoggedIn"
-      :is-admin="isAdmin"
-      :player-name="playerName"
-      :theme="theme"
-      :is-requesting-login="isRequestingLogin"
-      :is-logging-out="isLoggingOut"
-      @open-about="showAbout = true"
-      @open-how-to-play="showHowToPlay = true"
-      @open-help="showHelp = true"
-      @open-leaderboard="showLeaderboard = true"
-      @open-admin="showAdminPanel = true"
-      @open-change-username="showChangeUsername = true"
-      @toggle-theme="toggleTheme"
-      @login="openLoginPopup"
-      @logout="logout"
-    />
+    <NavBar :is-logged-in="isLoggedIn" :is-admin="isAdmin" :player-name="playerName" :theme="theme"
+      :is-requesting-login="isRequestingLogin" :is-logging-out="isLoggingOut" @open-about="showAbout = true"
+      @open-how-to-play="showHowToPlay = true" @open-help="showHelp = true" @open-leaderboard="showLeaderboard = true"
+      @open-admin="showAdminPanel = true" @open-change-username="showChangeUsername = true" @toggle-theme="toggleTheme"
+      @login="openLoginPopup" @logout="logout" />
 
     <!-- Main game page -->
-    <main class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:py-8">
+    <main
+  class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:py-8"
+>
+  <div class="space-y-6">
+    <!-- SECTION 1: Scoreboard -->
+    <Scoreboard
+      :orange-score="player1.score"
+      :green-score="player2.score"
+      :time-remaining="timer"
+      orange-team-name="Orange Team"
+      green-team-name="Green Team"
+    />
 
-      <div
-        class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
-      >
-        <!-- Shared guest/player content -->
-        <section class="min-w-0 space-y-5">
-          <!-- Scoreboard -->
-          <div
-            class="overflow-hidden rounded-2xl border border-white/10 bg-white/10 p-3 shadow-xl backdrop-blur-sm sm:p-5"
-          >
-            <!--
-              The current Scoreboard component reads usernames from its queue
-              prop, so queue is supplied in addition to the named props.
-            -->
-            <Scoreboard
-              class="!mx-0 !h-auto !w-full"
-              :queue="scoreboardUsers"
-              :timer="timer"
-              :user1="player1.username"
-              :user2="player2.username"
-              :user1score="player1.score"
-              :user2score="player2.score"
-            />
-          </div>
+    <!-- Main lower layout -->
+    <div
+      class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
+    >
+      <!-- SECTION 2: Game View -->
+      <GameView
+        :stream-type="streamType"
+        :is-in-game="isInGame"
+      />
 
-          <!-- Video -->
-          <div
-            class="overflow-hidden rounded-2xl border border-white/10 bg-black/30 shadow-xl"
-          >
-            <div
-              class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4"
-            >
-              <div>
-                <h2 class="text-xl font-bold">
-                  Live Match
-                </h2>
-
-                <p class="mt-1 text-sm text-white/60">
-                  {{
-                    isInGame
-                      ? "Use the WASD keys to control your assigned robot."
-                      : "Watch the current match in real time."
-                  }}
-                </p>
-              </div>
-
-              <span
-                class="rounded-full bg-red-600/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-red-200"
-              >
-                Live
-              </span>
-            </div>
-
-            <VideoStream
-              class="!max-w-none !p-0"
-              :stream-type="streamType"
-            />
-          </div>
-        </section>
-
-        <!-- Right panel -->
-        <aside class="min-w-0">
-          <!-- Active player controls -->
-          <div
-            v-if="isInGame"
-            class="rounded-2xl border border-orange-400/40 bg-white/10 p-6 shadow-xl backdrop-blur-sm"
-          >
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <p
-                  class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300"
-                >
-                  Robot Control
-                </p>
-
-                <h2 class="mt-1 text-2xl font-black">
-                  WASD Controls
-                </h2>
-              </div>
-
-              <span
-                class="rounded-full px-3 py-1 text-xs font-bold"
-                :class="controllerStatusClass"
-              >
-                {{ controllerStatus }}
-              </span>
-            </div>
-
-            <p class="mt-4 text-sm leading-6 text-white/70">
-              Click anywhere on the game page, then use W, A, S, and D to
-              control your robot.
-            </p>
-
-            <!-- Visual WASD keys -->
-            <div class="mt-8 flex flex-col items-center gap-2">
-              <button
-                type="button"
-                tabindex="-1"
-                class="flex h-16 w-16 items-center justify-center rounded-xl border-2 text-2xl font-black transition"
-                :class="controlKeyClass('w')"
-              >
-                W
-              </button>
-
-              <div class="flex gap-2">
-                <button
-                  v-for="key in ['a', 's', 'd'] as const"
-                  :key="key"
-                  type="button"
-                  tabindex="-1"
-                  class="flex h-16 w-16 items-center justify-center rounded-xl border-2 text-2xl font-black uppercase transition"
-                  :class="controlKeyClass(key)"
-                >
-                  {{ key }}
-                </button>
-              </div>
-            </div>
-
-            <div
-              class="mt-7 rounded-xl border border-white/10 bg-black/20 p-4"
-            >
-              <p class="text-xs font-bold uppercase tracking-wider text-white/50">
-                Current key payload
-              </p>
-
-              <p class="mt-2 font-mono text-2xl font-black tracking-[0.3em]">
-                {{ currentKeyPayload }}
-              </p>
-            </div>
-
-            <button
-              v-if="controllerStatus !== 'connected'"
-              type="button"
-              class="mt-5 w-full rounded-xl bg-[#f96c00] px-5 py-3 font-bold transition hover:bg-orange-500"
-              @click="connectController"
-            >
-              Reconnect Controller
-            </button>
-          </div>
-
-          <!-- Authenticated player queue -->
-          <div
-            v-else-if="isLoggedIn"
-            class="rounded-2xl border border-white/10 bg-white/10 p-3 shadow-xl backdrop-blur-sm"
-          >
-            <div class="px-3 pb-3 pt-2">
-              <p
-                class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300"
-              >
-                Player Access
-              </p>
-
-              <h2 class="mt-1 text-2xl font-black">
-                Match Queue
-              </h2>
-
-              <p class="mt-2 text-sm leading-6 text-white/65">
-                Join the queue and wait for a match confirmation.
-              </p>
-            </div>
-
-            <QueueContainer
-              class="!w-full"
-              :queue-users="queue"
-              :theme="theme"
-              @join-queue="joinQueue"
-              @leave-queue="leaveQueue"
-            />
-          </div>
-
-          <!-- Guest card; queue is intentionally hidden -->
-          <div
-            v-else
-            class="rounded-2xl border border-white/10 bg-white/10 p-6 shadow-xl backdrop-blur-sm"
-          >
-            <div
-              class="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f96c00]"
-            >
-              <svg
-                class="h-6 w-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422A12.083 12.083 0 0118.5 16c0 1.105-.895 2-2 2h-9a2 2 0 01-2-2c0-1.893.438-3.683 1.216-5.278L12 14z"
-                />
-              </svg>
-            </div>
-
-            <h2 class="mt-5 text-2xl font-black">
-              Want to play?
-            </h2>
-
-            <p class="mt-3 text-sm leading-6 text-white/70">
-              You are watching as a guest. Log in through the magic-link
-              process to reveal the player queue and join a match.
-            </p>
-
-            <button
-              type="button"
-              class="mt-6 w-full rounded-xl bg-[#f96c00] px-5 py-3 font-bold transition hover:bg-orange-500"
-              @click="openLoginPopup"
-            >
-            Log In to Join Queue
-            </button>
-          </div>
-        </aside>
-      </div>
-    </main>
+      <!-- SECTION 3: Sidebar -->
+      <GameSidebar
+        :queue="queue"
+        :theme="theme"
+        :is-logged-in="isLoggedIn"
+        :is-in-game="isInGame"
+        @join-queue="joinQueue"
+        @leave-queue="leaveQueue"
+        @login="openLoginPopup"
+      />
+    </div>
+  </div>
+</main>
 
     <!-- Existing project overlays -->
-     <LoginRequestOverlay
-  v-if="showLoginRequest"
-  :is-submitting="isRequestingLogin"
-  :success="loginRequestSuccess"
-  :error-message="loginRequestError"
-  @submit="requestLogin"
-  @close="closeLoginPopup"
-/>
-    <ConfirmMatchOverlay
-      v-if="confirmationRequest && stillNeedsResponse"
-      @confirm-response="confirmMatch"
-    />
+    <LoginRequestOverlay v-if="showLoginRequest" :is-submitting="isRequestingLogin" :success="loginRequestSuccess"
+      :error-message="loginRequestError" @submit="requestLogin" @close="closeLoginPopup" />
+    <ConfirmMatchOverlay v-if="confirmationRequest && stillNeedsResponse" @confirm-response="confirmMatch" />
 
-    <HelpOverlay
-      v-if="showHelp"
-      @close-help-overlay="showHelp = false"
-    />
+    <HelpOverlay v-if="showHelp" @close-help-overlay="showHelp = false" />
 
-    <AboutUsOverlay
-      v-if="showAbout"
-      @close-about-us-overlay="showAbout = false"
-    />
+    <AboutUsOverlay v-if="showAbout" @close-about-us-overlay="showAbout = false" />
 
-    <HowToPlayOverlay
-      v-if="showHowToPlay"
-      @close-how-to-play-overlay="showHowToPlay = false"
-    />
+    <HowToPlayOverlay v-if="showHowToPlay" @close-how-to-play-overlay="showHowToPlay = false" />
 
-    <LeaderBoardOverlay
-      v-if="showLeaderboard"
-      @close-leader-board-overlay="showLeaderboard = false"
-    />
+    <LeaderBoardOverlay v-if="showLeaderboard" @close-leader-board-overlay="showLeaderboard = false" />
 
-    <LogInOverlay
-      v-if="showChangeUsername && isLoggedIn"
-      :is-changing-username="true"
-      @close-log-in="showChangeUsername = false"
-    />
+    <LogInOverlay v-if="showChangeUsername && isLoggedIn" :is-changing-username="true"
+      @close-log-in="showChangeUsername = false" />
 
     <ClientOnly>
-      <AdminPanel
-        v-if="showAdminPanel && isAdmin"
-        @close-admin-panel="showAdminPanel = false"
-      />
+      <AdminPanel v-if="showAdminPanel && isAdmin" @close-admin-panel="showAdminPanel = false" />
     </ClientOnly>
   </div>
 </template>
@@ -419,10 +199,7 @@ const requestLogin = async (email: string) => {
 
     loginRequestSuccess.value = true;
   } catch (error) {
-    console.error(
-      "Error requesting login link:",
-      error,
-    );
+    console.error("Error requesting login link:", error);
 
     loginRequestError.value =
       "Failed to send the login link. Please try again.";
@@ -442,19 +219,13 @@ const logout = async () => {
     try {
       disconnectQueue(true);
     } catch (error) {
-      console.error(
-        "Failed to disconnect from queue during logout:",
-        error,
-      );
+      console.error("Failed to disconnect from queue during logout:", error);
     }
 
     try {
       endGame();
     } catch (error) {
-      console.error(
-        "Failed to end game during logout:",
-        error,
-      );
+      console.error("Failed to end game during logout:", error);
     }
 
     await $fetch("/api/user-logout", {
@@ -499,10 +270,7 @@ const applyTheme = () => {
     return;
   }
 
-  document.documentElement.classList.toggle(
-    "dark",
-    theme.value === "dark",
-  );
+  document.documentElement.classList.toggle("dark", theme.value === "dark");
 };
 
 const toggleTheme = () => {
@@ -532,11 +300,6 @@ const player2 = ref<MatchPlayer>({
   score: 0,
 });
 
-const scoreboardUsers = computed<[string, string]>(() => [
-  player1.value.username || "TBD",
-  player2.value.username || "TBD",
-]);
-
 const isInGame = ref(false);
 const hasSeenPositiveTimer = ref(false);
 
@@ -562,10 +325,7 @@ const createWebSocketUrl = (port: unknown) => {
     return "";
   }
 
-  const protocol =
-    window.location.protocol === "https:"
-      ? "wss"
-      : "ws";
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
 
   return `${protocol}://${serviceHost.value}:${String(port)}`;
 };
@@ -575,10 +335,7 @@ const createHttpUrl = (port: unknown, path: string) => {
     return "";
   }
 
-  const protocol =
-    window.location.protocol === "https:"
-      ? "https"
-      : "http";
+  const protocol = window.location.protocol === "https:" ? "https" : "http";
 
   return `${protocol}://${serviceHost.value}:${String(port)}${path}`;
 };
@@ -645,10 +402,7 @@ const connectGameFeed = () => {
     gameFeedStatus.value = "connecting";
 
     const source = new EventSource(
-      createHttpUrl(
-        config.public.PORT_SSE_GM,
-        "/sse-info",
-      ),
+      createHttpUrl(config.public.PORT_SSE_GM, "/sse-info"),
     );
 
     gameFeed.value = source;
@@ -672,13 +426,9 @@ const connectGameFeed = () => {
         return;
       }
 
-      if (
-        message.type === "UPDATE_QUEUE" &&
-        Array.isArray(message.payload)
-      ) {
+      if (message.type === "UPDATE_QUEUE" && Array.isArray(message.payload)) {
         queue.value = message.payload.filter(
-          (username): username is string =>
-            typeof username === "string",
+          (username): username is string => typeof username === "string",
         );
 
         return;
@@ -767,10 +517,8 @@ const joinQueue = () => {
 
   if (
     queueSocket.value &&
-    (
-      queueSocket.value.readyState === WebSocket.OPEN ||
-      queueSocket.value.readyState === WebSocket.CONNECTING
-    )
+    (queueSocket.value.readyState === WebSocket.OPEN ||
+      queueSocket.value.readyState === WebSocket.CONNECTING)
   ) {
     return;
   }
@@ -897,10 +645,7 @@ const disconnectQueue = (notifyServer = false) => {
     return;
   }
 
-  if (
-    notifyServer &&
-    socket.readyState === WebSocket.OPEN
-  ) {
+  if (notifyServer && socket.readyState === WebSocket.OPEN) {
     socket.send(
       JSON.stringify({
         type: "LEAVE_QUEUE",
@@ -1003,11 +748,7 @@ const resetKeyState = (sendUpdate = true) => {
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {
-  if (
-    !isInGame.value ||
-    event.repeat ||
-    isEditableElement(event.target)
-  ) {
+  if (!isInGame.value || event.repeat || isEditableElement(event.target)) {
     return;
   }
 
@@ -1062,10 +803,8 @@ const connectController = () => {
 
   if (
     controllerSocket.value &&
-    (
-      controllerSocket.value.readyState === WebSocket.OPEN ||
-      controllerSocket.value.readyState === WebSocket.CONNECTING
-    )
+    (controllerSocket.value.readyState === WebSocket.OPEN ||
+      controllerSocket.value.readyState === WebSocket.CONNECTING)
   ) {
     return;
   }
@@ -1074,9 +813,7 @@ const connectController = () => {
     controllerStatus.value = "connecting";
 
     const socket = new WebSocket(
-      createWebSocketUrl(
-        config.public.PORT_WSS_CONTROLLER_CLIENT,
-      ),
+      createWebSocketUrl(config.public.PORT_WSS_CONTROLLER_CLIENT),
     );
 
     controllerSocket.value = socket;
@@ -1137,12 +874,7 @@ const controlKeyClass = (key: ControlKey) => {
     ];
   }
 
-  return [
-    "border-white/20",
-    "bg-white/10",
-    "text-white",
-    "shadow-md",
-  ];
+  return ["border-white/20", "bg-white/10", "text-white", "shadow-md"];
 };
 
 /* -------------------------------------------------------------------------- */
@@ -1194,10 +926,7 @@ watch(isLoggedIn, (loggedIn) => {
 onMounted(() => {
   const savedTheme = localStorage.getItem("theme");
 
-  theme.value =
-    savedTheme === "dark"
-      ? "dark"
-      : "light";
+  theme.value = savedTheme === "dark" ? "dark" : "light";
 
   applyTheme();
   connectGameFeed();
