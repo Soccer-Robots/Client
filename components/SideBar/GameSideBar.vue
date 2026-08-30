@@ -20,7 +20,6 @@
 </template>
 
 <script setup lang="ts">
-
 interface LeaderboardPlayer {
   username: string;
   wins: number;
