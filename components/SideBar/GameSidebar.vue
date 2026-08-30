@@ -12,20 +12,25 @@
     />
 
     <LeaderBoardPanel
-      :players="leaderboard"
-    />
-
-    <!-- Chat later -->
+  :players="leaderboard"
+  :loading="leaderboardLoading"
+  :error-message="leaderboardError"
+  @sort-change="emit('sort-leaderboard', $event)"
+/>
   </aside>
 </template>
 
 <script setup lang="ts">
+import QueuePanel from "~/components/SideBar/QueuePanel.vue";
+import LeaderBoardPanel from "~/components/SideBar/LeaderBoardPanel.vue";
+
 interface LeaderboardPlayer {
   username: string;
   wins: number;
   losses: number;
   goals: number;
   gamesPlayed: number;
+  ratio: number;
 }
 
 type QueueStatus =
@@ -35,6 +40,13 @@ type QueueStatus =
   | "reconnecting"
   | "error";
 
+type LeaderboardSort =
+  | "wins"
+  | "losses"
+  | "goals"
+  | "gamesPlayed"
+  | "ratio";
+
 defineProps<{
   queue: string[];
   playerName: string;
@@ -42,11 +54,18 @@ defineProps<{
   isInGame: boolean;
   queueStatus: QueueStatus;
   leaderboard: LeaderboardPlayer[];
+  leaderboardLoading: boolean;
+  leaderboardError: string;
 }>();
 
 const emit = defineEmits<{
   (event: "join-queue"): void;
   (event: "leave-queue"): void;
   (event: "login"): void;
+
+  (
+    event: "sort-leaderboard",
+    sort: LeaderboardSort,
+  ): void;
 }>();
 </script>

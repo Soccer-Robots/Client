@@ -1,39 +1,54 @@
 <template>
   <section
-    class="overflow-hidden rounded-2xl border border-white/10 bg-white/10 shadow-xl backdrop-blur-sm"
+    class="flex h-[290px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/10 shadow-xl backdrop-blur-sm"
   >
     <!-- Header -->
     <div
       class="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4"
     >
       <div>
-        <p
-          class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300"
-        >
+        <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300">
           Rankings
         </p>
 
-        <h2 class="mt-1 text-xl font-black">
-          Leaderboard
-        </h2>
+        <h2 class="mt-1 text-xl font-black">Leaderboard</h2>
 
-        <p class="mt-1 text-sm text-white/60">
-          Top Soccer Robots players.
+        <p class="mt-1 text-sm text-white/60">Top Soccer Robots players.</p>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="loading" class="p-5">
+      <div
+        class="rounded-xl border border-white/10 bg-black/20 p-6 text-center"
+      >
+        <p class="font-bold">Loading leaderboard...</p>
+
+        <p class="mt-1 text-sm text-white/50">
+          Fetching the latest player rankings.
+        </p>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div v-else-if="errorMessage" class="p-5">
+      <div
+        class="rounded-xl border border-red-400/20 bg-red-400/10 p-6 text-center"
+      >
+        <p class="font-bold text-red-200">Unable to load leaderboard</p>
+
+        <p class="mt-2 text-sm text-red-200/70">
+          {{ errorMessage }}
         </p>
       </div>
     </div>
 
     <!-- Empty State -->
-    <div
-      v-if="players.length === 0"
-      class="p-5"
-    >
+    <div v-else-if="players.length === 0" class="p-5">
       <div
         class="rounded-xl border border-dashed border-white/15 p-6 text-center"
       >
-        <p class="font-bold">
-          No games played yet
-        </p>
+        <p class="font-bold">No games played yet</p>
 
         <p class="mt-1 text-sm text-white/50">
           Player rankings will appear here.
@@ -42,14 +57,15 @@
     </div>
 
     <!-- Leaderboard -->
-    <div v-else class="p-4">
-      <!-- Sort controls -->
-      <div class="mb-4 flex flex-wrap gap-2">
+    <div v-else class="flex min-h-0 flex-1 flex-col p-4">
+      <!-- Sort Controls -->
+      <div class="mb-4 flex shrink-0 flex-wrap gap-2">
         <button
           v-for="option in sortOptions"
           :key="option.value"
           type="button"
-          class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+          :disabled="loading"
+          class="rounded-lg px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
           :class="
             sortBy === option.value
               ? 'bg-[#f96c00] text-white'
@@ -61,13 +77,14 @@
         </button>
       </div>
 
-      <!-- Players -->
-      <div class="space-y-2">
+      <!-- Player Rankings -->
+      <div class="min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
         <div
           v-for="(player, index) in rankedPlayers"
           :key="player.username"
           class="rounded-xl border border-white/10 bg-black/20 p-3"
         >
+          <!-- Main Row -->
           <div class="flex items-center gap-3">
             <!-- Rank -->
             <div
@@ -77,7 +94,7 @@
               {{ index + 1 }}
             </div>
 
-            <!-- Player -->
+            <!-- Player Name -->
             <div class="min-w-0 flex-1">
               <p class="truncate font-bold">
                 {{ player.username }}
@@ -85,15 +102,12 @@
 
               <p class="mt-0.5 text-xs text-white/45">
                 {{ player.gamesPlayed }}
-                {{
-                  player.gamesPlayed === 1
-                    ? "game"
-                    : "games"
-                }}
+
+                {{ player.gamesPlayed === 1 ? "game" : "games" }}
               </p>
             </div>
 
-            <!-- Main displayed stat -->
+            <!-- Selected Stat -->
             <div class="text-right">
               <p class="text-lg font-black">
                 {{ displayedStat(player) }}
@@ -111,50 +125,46 @@
           <div
             class="mt-3 grid grid-cols-4 gap-2 border-t border-white/10 pt-3 text-center"
           >
+            <!-- Wins -->
             <div>
               <p class="font-bold text-emerald-300">
                 {{ player.wins }}
               </p>
 
-              <p
-                class="text-[10px] uppercase tracking-wider text-white/40"
-              >
+              <p class="text-[10px] uppercase tracking-wider text-white/40">
                 Wins
               </p>
             </div>
 
+            <!-- Losses -->
             <div>
               <p class="font-bold text-red-300">
                 {{ player.losses }}
               </p>
 
-              <p
-                class="text-[10px] uppercase tracking-wider text-white/40"
-              >
+              <p class="text-[10px] uppercase tracking-wider text-white/40">
                 Losses
               </p>
             </div>
 
+            <!-- Goals -->
             <div>
               <p class="font-bold">
                 {{ player.goals }}
               </p>
 
-              <p
-                class="text-[10px] uppercase tracking-wider text-white/40"
-              >
+              <p class="text-[10px] uppercase tracking-wider text-white/40">
                 Goals
               </p>
             </div>
 
+            <!-- Win / Loss Ratio -->
             <div>
               <p class="font-bold">
                 {{ formatRatio(player) }}
               </p>
 
-              <p
-                class="text-[10px] uppercase tracking-wider text-white/40"
-              >
+              <p class="text-[10px] uppercase tracking-wider text-white/40">
                 W/L
               </p>
             </div>
@@ -174,23 +184,27 @@ export interface LeaderboardPlayer {
   losses: number;
   goals: number;
   gamesPlayed: number;
+  ratio: number;
 }
 
-type SortOption =
-  | "wins"
-  | "losses"
-  | "goals"
-  | "gamesPlayed"
-  | "ratio";
+type SortOption = "wins" | "losses" | "goals" | "gamesPlayed" | "ratio";
 
 const props = withDefaults(
   defineProps<{
     players?: LeaderboardPlayer[];
+    loading?: boolean;
+    errorMessage?: string;
   }>(),
   {
     players: () => [],
+    loading: false,
+    errorMessage: "",
   },
 );
+
+const emit = defineEmits<{
+  (event: "sort-change", sort: SortOption): void;
+}>();
 
 const sortBy = ref<SortOption>("wins");
 
@@ -201,6 +215,10 @@ const sortOptions: {
   {
     label: "Wins",
     value: "wins",
+  },
+  {
+    label: "Losses",
+    value: "losses",
   },
   {
     label: "Goals",
@@ -216,43 +234,8 @@ const sortOptions: {
   },
 ];
 
-const winLossRatio = (
-  player: LeaderboardPlayer,
-) => {
-  if (player.losses === 0) {
-    return player.wins;
-  }
-
-  return player.wins / player.losses;
-};
-
 const rankedPlayers = computed(() => {
-  return [...props.players]
-    .sort((a, b) => {
-      switch (sortBy.value) {
-        case "wins":
-          return b.wins - a.wins;
-
-        case "losses":
-          return b.losses - a.losses;
-
-        case "goals":
-          return b.goals - a.goals;
-
-        case "gamesPlayed":
-          return b.gamesPlayed - a.gamesPlayed;
-
-        case "ratio":
-          return (
-            winLossRatio(b) -
-            winLossRatio(a)
-          );
-
-        default:
-          return 0;
-      }
-    })
-    .slice(0, 5);
+  return props.players;
 });
 
 const displayedStatLabel = computed(() => {
@@ -277,9 +260,7 @@ const displayedStatLabel = computed(() => {
   }
 });
 
-const displayedStat = (
-  player: LeaderboardPlayer,
-) => {
+const displayedStat = (player: LeaderboardPlayer) => {
   switch (sortBy.value) {
     case "wins":
       return player.wins;
@@ -301,26 +282,18 @@ const displayedStat = (
   }
 };
 
-const formatRatio = (
-  player: LeaderboardPlayer,
-) => {
-  if (player.losses === 0) {
-    if (player.wins === 0) {
-      return "0.00";
-    }
-
-    return `${player.wins}.00`;
-  }
-
-  return (
-    player.wins / player.losses
-  ).toFixed(2);
+const formatRatio = (player: LeaderboardPlayer) => {
+  return player.ratio.toFixed(2);
 };
 
-const setSort = (
-  option: SortOption,
-) => {
+const setSort = (option: SortOption) => {
+  if (sortBy.value === option) {
+    return;
+  }
+
   sortBy.value = option;
+
+  emit("sort-change", option);
 };
 
 const rankClass = (index: number) => {

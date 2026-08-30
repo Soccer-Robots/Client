@@ -34,11 +34,9 @@
         />
 
         <!-- Main lower layout -->
-        <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <!-- SECTION 2: Game View -->
+        <div class="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_340px]">
           <GameView :stream-type="streamType" :is-in-game="isInGame" />
 
-          <!-- SECTION 3: Sidebar -->
           <GameSidebar
             :queue="queue"
             :player-name="playerName"
@@ -46,9 +44,12 @@
             :is-in-game="isInGame"
             :queue-status="queueStatus"
             :leaderboard="leaderboard"
+            :leaderboard-loading="leaderboardLoading"
+            :leaderboard-error="leaderboardError"
             @join-queue="joinQueue"
             @leave-queue="leaveQueue"
             @login="openLoginPopup"
+            @sort-leaderboard="loadLeaderboard"
           />
         </div>
       </div>
@@ -111,29 +112,48 @@ import {
   shallowRef,
   watch,
 } from "vue";
-const leaderboard = ref([
-  {
-    username: "OrangeRobot",
-    wins: 12,
-    losses: 3,
-    goals: 31,
-    gamesPlayed: 15,
-  },
-  {
-    username: "GreenMachine",
-    wins: 9,
-    losses: 5,
-    goals: 24,
-    gamesPlayed: 14,
-  },
-  {
-    username: "SoccerBot",
-    wins: 7,
-    losses: 4,
-    goals: 19,
-    gamesPlayed: 11,
-  },
-]);
+
+type LeaderboardSort = "wins" | "losses" | "goals" | "gamesPlayed" | "ratio";
+
+interface LeaderboardPlayer {
+  username: string;
+  wins: number;
+  losses: number;
+  goals: number;
+  gamesPlayed: number;
+  ratio: number;
+}
+
+const leaderboard = ref<LeaderboardPlayer[]>([]);
+
+const leaderboardSort = ref<LeaderboardSort>("wins");
+
+const leaderboardLoading = ref(false);
+
+const leaderboardError = ref("");
+
+const loadLeaderboard = async (
+  sort: LeaderboardSort = leaderboardSort.value,
+) => {
+  leaderboardSort.value = sort;
+
+  leaderboardLoading.value = true;
+  leaderboardError.value = "";
+
+  try {
+    leaderboard.value = await $fetch<LeaderboardPlayer[]>("/api/leaderboard", {
+      query: {
+        sortedColumn: sort,
+      },
+    });
+  } catch (error) {
+    console.error("Error loading leaderboard:", error);
+    leaderboardError.value = "Failed to load leaderboard.";
+    leaderboard.value = [];
+  } finally {
+    leaderboardLoading.value = false;
+  }
+};
 
 type Theme = "light" | "dark";
 
@@ -986,6 +1006,7 @@ onMounted(() => {
 
   applyTheme();
   connectGameFeed();
+  void loadLeaderboard();
 
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("keyup", handleKeyUp);

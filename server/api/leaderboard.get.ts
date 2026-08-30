@@ -1,26 +1,75 @@
-import { PrismaClient, Player } from '@prisma/client'
+import type { PrismaClient } from "@prisma/client";
+import {
+  defineEventHandler,
+  getQuery,
+} from "h3";
 
-//listens for event to get the leaderboard. It fetches the top 5 chars from the leaderboard
+type LeaderboardSort =
+  | "wins"
+  | "losses"
+  | "goals"
+  | "gamesPlayed"
+  | "ratio";
+
 export default defineEventHandler(async (event) => {
-  const prisma = event.context.prisma
-  //gets which column is going to be sorted.
-  const { sortedColumn } = getQuery(event)
+  const prisma =
+    event.context.prisma as PrismaClient;
 
-  //order them by descending order
-  const allowedColumns = ['wins', 'goals', 'losses', 'ratio', 'username'] as const
+  const { sortedColumn } = getQuery(event);
 
-  const column = allowedColumns.includes(sortedColumn as any)
-    ? (sortedColumn as string)
-    : 'wins' 
-  
-  //now take first 5 from the column that's being sorted and put that as the player data. For example of the column from event was "score", gets top 5 players
-  //with the highest scores
-  const playerData = await prisma.player.findMany({
-    orderBy: {
-      [column]: 'desc',
+  const requestedSort: LeaderboardSort =
+    sortedColumn === "losses" ||
+    sortedColumn === "goals" ||
+    sortedColumn === "gamesPlayed" ||
+    sortedColumn === "ratio"
+      ? sortedColumn
+      : "wins";
+
+  /*
+   * Frontend calls it "gamesPlayed".
+   * Prisma calls the column "games".
+   */
+  const databaseSort =
+    requestedSort === "gamesPlayed"
+      ? "games"
+      : requestedSort;
+
+  const players = await prisma.player.findMany({
+    select: {
+      username: true,
+      wins: true,
+      losses: true,
+      goals: true,
+      games: true,
+      ratio: true,
     },
-    take: 5,
-  }) as Player[]
 
-  return playerData
-})
+    orderBy: [
+      {
+        [databaseSort]: "desc",
+      },
+
+      // Stable order when two players have same stat
+      {
+        username: "asc",
+      },
+    ],
+
+    take: 50,
+  });
+
+  /*
+   * Normalize database naming to the
+   * frontend LeaderboardPlayer interface.
+   */
+  return players.map((player) => ({
+    username: player.username,
+    wins: player.wins,
+    losses: player.losses,
+    goals: player.goals,
+
+    gamesPlayed: player.games,
+
+    ratio: player.ratio ?? 0,
+  }));
+});
