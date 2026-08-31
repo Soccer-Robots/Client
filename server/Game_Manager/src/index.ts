@@ -78,7 +78,7 @@ const gameCycle = setInterval(async () => {
     // Check for sufficient users in queue to send confirmation request
     await matchSettings();
 
-    if (queue.length == numPlayers * 2) {
+    if (queue.length >= numPlayers * 2) {
       if (robots_ready) {
         // robots are ready to play
 
@@ -523,9 +523,9 @@ wss_client_gm.on(
           return element.username === username;
         });
         // do not let in if user is in game
-        const player_index = players.findIndex((element) => {
-          return element.username === username;
-        });
+        const player_index = players.findIndex(
+          (element) => element.user_id === user_id,
+        );
         //if somehow they're not in, add them to the queue
         if (index == -1 && player_index == -1) {
           console.log("ADDING " + username);
@@ -541,13 +541,14 @@ wss_client_gm.on(
         //can remove two ways: if they were found, OR if they are not being sent a confirmation message
         //(those at indices 0 and 1 are sent confirm messages when game is in that state. Don't want the
         //user to be able to leave the queue without rejecting or accepting)
-        if (
-          index != -1 &&
-          !(
-            game_state === GAME_STATE.SEND_CONFIRM &&
-            (index == 0 || index == 1)
-          )
-        ) {
+
+        const expectedPlayers = numPlayers * 2;
+
+        const isBeingConfirmed =
+          game_state === GAME_STATE.SEND_CONFIRM &&
+          index >= 0 &&
+          index < expectedPlayers;
+        if (index != -1 && !isBeingConfirmed) {
           console.log("REMOVING " + queue[index]["username"]);
           queue.splice(index, 1);
         }
@@ -570,16 +571,20 @@ wss_client_gm.on(
           // make sure players do not accept/decline multiple times
           if (player_index == -1) {
             // make sure users are the next 2 in queue
-            if (
-              queue[0]["username"] === username ||
-              queue[1]["username"] === username
-            ) {
+            const expectedPlayers = numPlayers * 2;
+
+            const invitedPlayers = queue.slice(0, expectedPlayers);
+
+            const wasInvited = invitedPlayers.some(
+              (player) => player.user_id === user_id,
+            );
+            if (wasInvited) {
               //if so, add them to the player queue, even if they rejected
               players.push({
-                username: username,
-                user_id: user_id,
-                ws: ws,
-                accepted: accepted,
+                username,
+                user_id,
+                ws,
+                accepted,
               });
               console.log(
                 `Player ${username} has ${accepted ? "accepted" : "declined"}`,
@@ -671,15 +676,132 @@ server_wss_CLIENT_GM.listen(PORT_CLIENT_GM, () => {
 const app_sse = express();
 app_sse.use(cors());
 
-const sse_clients: Array<any> = [];
+interface SseClient {
+  id: number;
+  response: express.Response;
+}
 
+const sse_clients: SseClient[] = [];
 app_sse.listen(PORT_SSE_GM, () => {
   console.log(`SSE is running on http://${LOCALHOST}:${PORT_SSE_GM}`);
 });
 
-app_sse.get("/", (request, response) => {
-  response.send("SSE SERVER");
-});
+app_sse.get(
+  "/sse-info",
+  (request, response) => {
+    const headers = {
+      "Content-Type":
+        "text/event-stream",
+      Connection: "keep-alive",
+      "Cache-Control": "no-cache",
+    };
+
+    response.writeHead(
+      200,
+      headers,
+    );
+
+    const clientID =
+      Date.now();
+
+    const newClient: SseClient = {
+      id: clientID,
+      response,
+    };
+
+    console.log(
+      `[SSE] Client connected: ${clientID}`,
+    );
+
+    sse_clients.push(
+      newClient,
+    );
+
+    console.log(
+      `[SSE] Active clients: ${sse_clients.length}`,
+    );
+
+    request.on(
+      "close",
+      () => {
+        const index =
+          sse_clients.findIndex(
+            (client) =>
+              client.id ===
+              clientID,
+          );
+
+        if (index !== -1) {
+          sse_clients.splice(
+            index,
+            1,
+          );
+        }
+
+        console.log(
+          `[SSE] Client disconnected: ${clientID}`,
+        );
+
+        console.log(
+          `[SSE] Active clients: ${sse_clients.length}`,
+        );
+      },
+    );
+  },
+);
+
+const broadcastSse = (
+  message: unknown,
+) => {
+  const data =
+    `data: ${JSON.stringify(
+      message,
+    )}\n\n`;
+
+  for (
+    let i =
+      sse_clients.length - 1;
+    i >= 0;
+    i--
+  ) {
+    const client =
+      sse_clients[i];
+
+    /*
+     * Remove dead responses that may
+     * not have triggered cleanup yet.
+     */
+    if (
+      client.response
+        .writableEnded ||
+      client.response.destroyed
+    ) {
+      sse_clients.splice(
+        i,
+        1,
+      );
+
+      continue;
+    }
+
+    try {
+      client.response.write(
+        data,
+      );
+    } catch (error) {
+      console.error(
+        `[SSE] Failed writing to client ${client.id}:`,
+        error,
+      );
+
+      sse_clients.splice(
+        i,
+        1,
+      );
+    }
+  }
+};
+
 
 // Establish SSE connection. This one broadcasts to all clients regardless of if they're in the queue or not.
 app_sse.get("/sse-info", (request, response) => {
