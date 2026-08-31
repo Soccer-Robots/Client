@@ -158,26 +158,15 @@ const loadLeaderboard = async (
 
 type Theme = "light" | "dark";
 
-type ConnectionStatus =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "reconnecting"
-  | "error";
 
-type ControlKey = "w" | "a" | "s" | "d";
+
 
 interface SessionUser {
   username?: string;
   role?: string;
 }
 
-interface SocketMessage {
-  type?: string;
-  payload?: unknown;
-}
 
-const config = useRuntimeConfig();
 
 useHead({
   title: "Game | Soccer Robots",
@@ -370,8 +359,6 @@ const streamType = computed<"twitch" | "janus">(() => {
 /* -------------------------------------------------------------------------- */
 
 const {
-  controllerStatus,
-  keyState,
   connectController,
   disconnectController,
 } = useRobotController({
@@ -396,55 +383,6 @@ const handleMatchStart = async (
   await nextTick();
 
   connectController();
-};
-
-/* -------------------------------------------------------------------------- */
-/* Service URLs                                                               */
-/* -------------------------------------------------------------------------- */
-
-const serviceHost = computed(() => {
-  const configuredHost = String(config.public.LOCALHOST || "localhost");
-
-  return configuredHost
-    .replace(/^https?:\/\//, "")
-    .replace(/^wss?:\/\//, "")
-    .replace(/\/.*$/, "");
-});
-
-const createWebSocketUrl = (port: unknown) => {
-  if (!import.meta.client) {
-    return "";
-  }
-
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-
-  return `${protocol}://${serviceHost.value}:${String(port)}`;
-};
-
-/* -------------------------------------------------------------------------- */
-/* Safe message parsing                                                       */
-/* -------------------------------------------------------------------------- */
-
-const parseMessage = (value: unknown): SocketMessage | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-
-    if (!parsed || typeof parsed !== "object") {
-      return null;
-    }
-
-    return parsed as SocketMessage;
-  } catch {
-    /*
-     * Both current WebSocket servers send the plain string "CONNECTED" when a
-     * connection is established. That is not JSON and can safely be ignored.
-     */
-    return null;
-  }
 };
 
 
@@ -474,60 +412,11 @@ const {
   timer,
   player1,
   player2,
-  gameFeedStatus,
   connectGameFeed,
   disconnectGameFeed,
 } = useGameFeed({
   isInGame,
   onGameEnd: endGame,
-});
-
-const controlKeyClass = (key: ControlKey) => {
-  if (keyState[key] === 1) {
-    return [
-      "border-orange-300",
-      "bg-[#f96c00]",
-      "text-white",
-      "shadow-lg",
-      "shadow-orange-900/30",
-      "scale-95",
-    ];
-  }
-
-  return ["border-white/20", "bg-white/10", "text-white", "shadow-md"];
-};
-
-/* -------------------------------------------------------------------------- */
-/* Status badge classes                                                       */
-/* -------------------------------------------------------------------------- */
-
-const statusClass = (status: ConnectionStatus) => {
-  switch (status) {
-    case "connected":
-      return "bg-emerald-400/20 text-emerald-200";
-
-    case "connecting":
-    case "reconnecting":
-      return "bg-yellow-400/20 text-yellow-200";
-
-    case "error":
-      return "bg-red-400/20 text-red-200";
-
-    default:
-      return "bg-white/10 text-white/60";
-  }
-};
-
-const gameFeedStatusClass = computed(() => {
-  return statusClass(gameFeedStatus.value);
-});
-
-const queueStatusClass = computed(() => {
-  return statusClass(queueStatus.value);
-});
-
-const controllerStatusClass = computed(() => {
-  return statusClass(controllerStatus.value);
 });
 
 /* -------------------------------------------------------------------------- */
