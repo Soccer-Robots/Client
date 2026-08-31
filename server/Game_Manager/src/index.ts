@@ -576,13 +576,7 @@ const wss_client_gm = new WebSocketServer({ noServer: true });
 wss_client_gm.on(
   "connection",
   (ws: any, request: IncomingMessage, username: string, user_id: string) => {
-    console.log(
-  `[SSE] Client connected: ${clientID}`,
-);
-
-console.log(
-  `[SSE] Active clients: ${sse_clients.length}`,
-);
+    console.log("New connection!");
 
     // kick user if ws connection is lost or closed
     ws.onclose = (event: any) => {
