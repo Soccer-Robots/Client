@@ -788,7 +788,8 @@ const broadcastSse = (message: unknown) => {
   }
 };
 
-// Establish SSE connection. This one broadcasts to all clients regardless of if thn("close"ey're in the queue or not.
+// Establish SSE connection.
+// This broadcasts game information to all connected clients.
 app_sse.get("/sse-info", (request, response) => {
   const headers = {
     "Content-Type": "text/event-stream",
@@ -802,7 +803,9 @@ app_sse.get("/sse-info", (request, response) => {
     id: clientID,
     response: response,
   };
-  console.log("sse-info: " + clientID);
+  console.log(`[SSE] Client connected: ${clientID}`);
+
+  console.log(`[SSE] Active clients: ${sse_clients.length}`);
   //adds client to the array
   sse_clients.push(newClient);
 
