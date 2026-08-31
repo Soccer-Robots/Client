@@ -10,8 +10,8 @@ const PORT_WSS_CONTROLLER_RASPBERRY: number = parseInt(`${process.env.PORT_WSS_C
 // Shared variables
 let ready: boolean = true
 let timer: number = 0
-let score1: number = 10
-let score2: number = 2
+let score1: number = 0
+let score2: number = 0
 
 // FOR GAME MANAGER
 const wss_gm = new WebSocketServer({ port: PORT_GM_RASPBERRY})
@@ -44,6 +44,8 @@ wss_gm.on("connection", (ws: any, request) => {
         //if GM is wanting to start the game, do just that.
         else if(type === "GAME_START"){
             timer = payload["timer"]
+            score1 = 0
+            score2 = 0
             //every second, the broadcast timer updates, decrementing by 1
             const broadcastTimer = setInterval(() => {
                 //when timer over

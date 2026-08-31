@@ -1,8 +1,4 @@
-import {
-  computed,
-  ref,
-  shallowRef,
-} from "vue";
+import { computed, ref, shallowRef } from "vue";
 
 import type { Ref } from "vue";
 
@@ -28,9 +24,7 @@ interface UseGameFeedOptions {
   onGameEnd: () => void;
 }
 
-export const useGameFeed = (
-  options: UseGameFeedOptions,
-) => {
+export const useGameFeed = (options: UseGameFeedOptions) => {
   const config = useRuntimeConfig();
 
   // --------------------------------------------------------------------------
@@ -51,27 +45,38 @@ export const useGameFeed = (
     score: 0,
   });
 
-  const gameFeedStatus =
-    ref<GameFeedConnectionStatus>("disconnected");
+  const gameFeedStatus = ref<GameFeedConnectionStatus>("disconnected");
 
   // Internal SSE connection
-  const gameFeed =
-    shallowRef<EventSource | null>(null);
+  const gameFeed = shallowRef<EventSource | null>(null);
 
   /*
    * Prevent timer = 0 before a match begins
    * from incorrectly ending the match.
    */
   const hasSeenPositiveTimer = ref(false);
+  const resetGameState = () => {
+    timer.value = 0;
+
+    player1.value = {
+      username: "",
+      score: 0,
+    };
+
+    player2.value = {
+      username: "",
+      score: 0,
+    };
+
+    hasSeenPositiveTimer.value = false;
+  };
 
   // --------------------------------------------------------------------------
   // Service URL
   // --------------------------------------------------------------------------
 
   const serviceHost = computed(() => {
-    const configuredHost = String(
-      config.public.LOCALHOST || "localhost",
-    );
+    const configuredHost = String(config.public.LOCALHOST || "localhost");
 
     return configuredHost
       .replace(/^https?:\/\//, "")
@@ -79,18 +84,12 @@ export const useGameFeed = (
       .replace(/\/.*$/, "");
   });
 
-  const createHttpUrl = (
-    port: unknown,
-    path: string,
-  ) => {
+  const createHttpUrl = (port: unknown, path: string) => {
     if (!import.meta.client) {
       return "";
     }
 
-    const protocol =
-      window.location.protocol === "https:"
-        ? "https"
-        : "http";
+    const protocol = window.location.protocol === "https:" ? "https" : "http";
 
     return `${protocol}://${serviceHost.value}:${String(port)}${path}`;
   };
@@ -99,9 +98,7 @@ export const useGameFeed = (
   // Message parsing
   // --------------------------------------------------------------------------
 
-  const parseMessage = (
-    value: unknown,
-  ): SocketMessage | null => {
+  const parseMessage = (value: unknown): SocketMessage | null => {
     if (typeof value !== "string") {
       return null;
     }
@@ -109,10 +106,7 @@ export const useGameFeed = (
     try {
       const parsed = JSON.parse(value);
 
-      if (
-        !parsed ||
-        typeof parsed !== "object"
-      ) {
+      if (!parsed || typeof parsed !== "object") {
         return null;
       }
 
@@ -126,18 +120,12 @@ export const useGameFeed = (
     }
   };
 
-  const parseMatchPlayer = (
-    value: unknown,
-  ): MatchPlayer | null => {
-    if (
-      !value ||
-      typeof value !== "object"
-    ) {
+  const parseMatchPlayer = (value: unknown): MatchPlayer | null => {
+    if (!value || typeof value !== "object") {
       return null;
     }
 
-    const candidate =
-      value as Partial<MatchPlayer>;
+    const candidate = value as Partial<MatchPlayer>;
 
     if (
       typeof candidate.username !== "string" ||
@@ -157,29 +145,21 @@ export const useGameFeed = (
   // --------------------------------------------------------------------------
 
   const connectGameFeed = () => {
-    if (
-      !import.meta.client ||
-      gameFeed.value
-    ) {
+    if (!import.meta.client || gameFeed.value) {
       return;
     }
 
     try {
-      gameFeedStatus.value =
-        "connecting";
+      gameFeedStatus.value = "connecting";
 
       const source = new EventSource(
-        createHttpUrl(
-          config.public.PORT_SSE_GM,
-          "/sse-info",
-        ),
+        createHttpUrl(config.public.PORT_SSE_GM, "/sse-info"),
       );
 
       gameFeed.value = source;
 
       source.onopen = () => {
-        gameFeedStatus.value =
-          "connected";
+        gameFeedStatus.value = "connected";
       };
 
       source.onerror = () => {
@@ -187,13 +167,11 @@ export const useGameFeed = (
          * EventSource automatically attempts
          * to reconnect.
          */
-        gameFeedStatus.value =
-          "reconnecting";
+        gameFeedStatus.value = "reconnecting";
       };
 
       source.onmessage = (event) => {
-        const message =
-          parseMessage(event.data);
+        const message = parseMessage(event.data);
 
         if (!message?.type) {
           return;
@@ -203,18 +181,10 @@ export const useGameFeed = (
         // Queue update
         // --------------------------------------------------
 
-        if (
-          message.type === "UPDATE_QUEUE" &&
-          Array.isArray(message.payload)
-        ) {
-          queue.value =
-            message.payload.filter(
-              (
-                username,
-              ): username is string =>
-                typeof username ===
-                "string",
-            );
+        if (message.type === "UPDATE_QUEUE" && Array.isArray(message.payload)) {
+          queue.value = message.payload.filter(
+            (username): username is string => typeof username === "string",
+          );
 
           return;
         }
@@ -225,15 +195,12 @@ export const useGameFeed = (
 
         if (
           message.type === "UPDATE_TIMER" &&
-          typeof message.payload ===
-            "number"
+          typeof message.payload === "number"
         ) {
-          timer.value =
-            message.payload;
+          timer.value = message.payload;
 
           if (message.payload > 0) {
-            hasSeenPositiveTimer.value =
-              true;
+            hasSeenPositiveTimer.value = true;
           }
 
           if (
@@ -241,12 +208,7 @@ export const useGameFeed = (
             hasSeenPositiveTimer.value &&
             message.payload <= 0
           ) {
-            /*
-             * Reset our internal timer state
-             * before ending the game.
-             */
-            hasSeenPositiveTimer.value =
-              false;
+            resetGameState();
 
             options.onGameEnd();
           }
@@ -259,44 +221,30 @@ export const useGameFeed = (
         // --------------------------------------------------
 
         if (
-          message.type ===
-            "UPDATE_SCORE" &&
+          message.type === "UPDATE_SCORE" &&
           message.payload &&
-          typeof message.payload ===
-            "object"
+          typeof message.payload === "object"
         ) {
-          const payload =
-            message.payload as {
-              player1?: unknown;
-              player2?: unknown;
-            };
+          const payload = message.payload as {
+            player1?: unknown;
+            player2?: unknown;
+          };
 
-          const nextPlayer1 =
-            parseMatchPlayer(
-              payload.player1,
-            );
+          const nextPlayer1 = parseMatchPlayer(payload.player1);
 
-          const nextPlayer2 =
-            parseMatchPlayer(
-              payload.player2,
-            );
+          const nextPlayer2 = parseMatchPlayer(payload.player2);
 
           if (nextPlayer1) {
-            player1.value =
-              nextPlayer1;
+            player1.value = nextPlayer1;
           }
 
           if (nextPlayer2) {
-            player2.value =
-              nextPlayer2;
+            player2.value = nextPlayer2;
           }
         }
       };
     } catch (error) {
-      console.error(
-        "Failed to connect to the game feed:",
-        error,
-      );
+      console.error("Failed to connect to the game feed:", error);
 
       gameFeedStatus.value = "error";
     }
@@ -307,8 +255,7 @@ export const useGameFeed = (
 
     gameFeed.value = null;
 
-    gameFeedStatus.value =
-      "disconnected";
+    gameFeedStatus.value = "disconnected";
   };
 
   return {
@@ -322,5 +269,6 @@ export const useGameFeed = (
     // Actions
     connectGameFeed,
     disconnectGameFeed,
+    resetGameState,
   };
 };
