@@ -175,7 +175,7 @@ const gameCycle = setInterval(async () => {
           return;
         }
 
-        game_state = GAME_STATE.NOT_PLAYING;
+        game_state = GAME_STATE.PLAYING;
         CONTROLLER_ACCESS = nanoid(); // new access code for each match
 
         // tell players to start the game
@@ -260,10 +260,12 @@ const gameCycle = setInterval(async () => {
           }
         }
 
-        //Remove players from queue
+        // Remove players from queue
         let num = queue.length;
+
         for (let j = 0; j < declinedArray.length; j++) {
-          let ID = declinedArray[j];
+          const ID = declinedArray[j];
+
           for (let m = 0; m < num; m++) {
             if (queue[m]["user_id"] === ID) {
               queue.splice(m, 1);
@@ -271,6 +273,15 @@ const gameCycle = setInterval(async () => {
             }
           }
         }
+
+        /*
+         * Confirmation attempt is finished.
+         */
+        players.splice(0, players.length);
+
+        confirmation_timer = 0;
+
+        game_state = GAME_STATE.NOT_PLAYING;
       }
     }
     if (game_state === GAME_STATE.SEND_CONFIRM && confirmation_timer > 0) {
