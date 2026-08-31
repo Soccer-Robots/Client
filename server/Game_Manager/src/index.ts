@@ -453,22 +453,21 @@ const resetGame = async () => {
   // Clear active match state
   // --------------------------------------------------
 
-  //remove them from the player queue
   players.splice(0, players.length);
 
-  //makes it so now there's no players curerntlyl anymore
   currentPlayers.splice(0, currentPlayers.length);
 
-  //now that game just ended robots are not ready until the raspberry pi says so.
+  confirmation_timer = 0;
+  CONFIRMATION_PASSWORD = "";
+
+  CONTROLLER_ACCESS = "";
+
   robots_ready = false;
 
   timer = 0;
 
-  /*
-   * Temporary controller authorization should
-   * not survive a completed match.
-   */
-  CONTROLLER_ACCESS = "";
+  score1 = 0;
+  score2 = 0;
 
   game_state = GAME_STATE.NOT_PLAYING;
 
