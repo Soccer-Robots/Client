@@ -112,61 +112,26 @@ import {
 } from "vue";
 import { useGameFeed } from "~/composables/useGameFeed";
 import { useMatchQueue } from "~/composables/useMatchQueue";
-import {useRobotController} from "~/composables/useRobotController";
+import { useRobotController } from "~/composables/useRobotController";
+import { useLeaderboard } from "~/composables/useLeaderboard";
 
-type LeaderboardSort = "wins" | "losses" | "goals" | "gamesPlayed" | "ratio";
+/* -------------------------------------------------------------------------- */
+/* Leaderboard                                                                */
+/* -------------------------------------------------------------------------- */
 
-interface LeaderboardPlayer {
-  username: string;
-  wins: number;
-  losses: number;
-  goals: number;
-  gamesPlayed: number;
-  ratio: number;
-}
-
-const leaderboard = ref<LeaderboardPlayer[]>([]);
-
-const leaderboardSort = ref<LeaderboardSort>("wins");
-
-const leaderboardLoading = ref(false);
-
-const leaderboardError = ref("");
-
-const loadLeaderboard = async (
-  sort: LeaderboardSort = leaderboardSort.value,
-) => {
-  leaderboardSort.value = sort;
-
-  leaderboardLoading.value = true;
-  leaderboardError.value = "";
-
-  try {
-    leaderboard.value = await $fetch<LeaderboardPlayer[]>("/api/leaderboard", {
-      query: {
-        sortedColumn: sort,
-      },
-    });
-  } catch (error) {
-    console.error("Error loading leaderboard:", error);
-    leaderboardError.value = "Failed to load leaderboard.";
-    leaderboard.value = [];
-  } finally {
-    leaderboardLoading.value = false;
-  }
-};
+const {
+  leaderboard,
+  leaderboardLoading,
+  leaderboardError,
+  loadLeaderboard,
+} = useLeaderboard();
 
 type Theme = "light" | "dark";
-
-
-
 
 interface SessionUser {
   username?: string;
   role?: string;
 }
-
-
 
 useHead({
   title: "Game | Soccer Robots",
