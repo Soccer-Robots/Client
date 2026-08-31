@@ -686,122 +686,31 @@ app_sse.listen(PORT_SSE_GM, () => {
   console.log(`SSE is running on http://${LOCALHOST}:${PORT_SSE_GM}`);
 });
 
-app_sse.get(
-  "/sse-info",
-  (request, response) => {
-    const headers = {
-      "Content-Type":
-        "text/event-stream",
-      Connection: "keep-alive",
-      "Cache-Control": "no-cache",
-    };
+const broadcastSse = (message: unknown) => {
+  const data = `data: ${JSON.stringify(message)}\n\n`;
 
-    response.writeHead(
-      200,
-      headers,
-    );
-
-    const clientID =
-      Date.now();
-
-    const newClient: SseClient = {
-      id: clientID,
-      response,
-    };
-
-    console.log(
-      `[SSE] Client connected: ${clientID}`,
-    );
-
-    sse_clients.push(
-      newClient,
-    );
-
-    console.log(
-      `[SSE] Active clients: ${sse_clients.length}`,
-    );
-
-    request.on(
-      "close",
-      () => {
-        const index =
-          sse_clients.findIndex(
-            (client) =>
-              client.id ===
-              clientID,
-          );
-
-        if (index !== -1) {
-          sse_clients.splice(
-            index,
-            1,
-          );
-        }
-
-        console.log(
-          `[SSE] Client disconnected: ${clientID}`,
-        );
-
-        console.log(
-          `[SSE] Active clients: ${sse_clients.length}`,
-        );
-      },
-    );
-  },
-);
-
-const broadcastSse = (
-  message: unknown,
-) => {
-  const data =
-    `data: ${JSON.stringify(
-      message,
-    )}\n\n`;
-
-  for (
-    let i =
-      sse_clients.length - 1;
-    i >= 0;
-    i--
-  ) {
-    const client =
-      sse_clients[i];
+  for (let i = sse_clients.length - 1; i >= 0; i--) {
+    const client = sse_clients[i];
 
     /*
      * Remove dead responses that may
      * not have triggered cleanup yet.
      */
-    if (
-      client.response
-        .writableEnded ||
-      client.response.destroyed
-    ) {
-      sse_clients.splice(
-        i,
-        1,
-      );
+    if (client.response.writableEnded || client.response.destroyed) {
+      sse_clients.splice(i, 1);
 
       continue;
     }
 
     try {
-      client.response.write(
-        data,
-      );
+      client.response.write(data);
     } catch (error) {
-      console.error(
-        `[SSE] Failed writing to client ${client.id}:`,
-        error,
-      );
+      console.error(`[SSE] Failed writing to client ${client.id}:`, error);
 
-      sse_clients.splice(
-        i,
-        1,
-      );
+      sse_clients.splice(i, 1);
     }
   }
 };
-
 
 // Establish SSE connection. This one broadcasts to all clients regardless of if they're in the queue or not.
 app_sse.get("/sse-info", (request, response) => {
@@ -829,48 +738,52 @@ app_sse.get("/sse-info", (request, response) => {
 // Broadcast Queue, Timer, and Score1/Score2
 
 //sets a loop running every second, which broadcasts the current queue to all the clients
-const broadcastQueue = setInterval(() => {
-  const queue_users: Array<string> = [];
-  //for each user the queue, add their username to the array that will be returned, queue_users
-  queue.forEach((user) => {
-    queue_users.push(user["username"]);
-  });
-  //JSON-ify what will be sent, that being the updated queue with the appropriate payload
-  const queue_update = JSON.stringify({
-    type: "UPDATE_QUEUE",
-    payload: queue_users,
-  });
-  //for each client, write the response as the new queue
-  sse_clients.forEach((client) => {
-    client["response"].write("data: " + queue_update + "\n\n");
-  });
-}, 1000);
+const broadcastQueue =
+  setInterval(() => {
+    const queue_users =
+      queue.map(
+        (user) =>
+          user.username,
+      );
+
+    broadcastSse({
+      type: "UPDATE_QUEUE",
+      payload: queue_users,
+    });
+  }, 1000);
 
 //sets a loop running every second, broacsasting the current timer to all clients, regarldess of if they're in the queue
-const broadcastTimer = setInterval(() => {
-  //JSON-ifie's the message type as updating the timer for the clients, and the payload being the value
-  const timer_update = JSON.stringify({ type: "UPDATE_TIMER", payload: timer });
-  //for each client, write response as new timer
-  sse_clients.forEach((client) => {
-    client["response"].write("data: " + timer_update + "\n\n");
-  });
-}, 1000);
+const broadcastTimer =
+  setInterval(() => {
+    broadcastSse({
+      type: "UPDATE_TIMER",
+      payload: timer,
+    });
+  }, 1000);
 
 //sets a loop running every second, broacasting the scores of both players currently.
-const broadcastScore = setInterval(() => {
-  //set message type as updating the score, and give username and score of both players (needs to be changed for multiple players)
-  const score_update = JSON.stringify({
-    type: "UPDATE_SCORE",
-    payload: {
-      player1: { username: players[0]?.["username"] ?? "", score: score1 },
-      player2: { username: players[1]?.["username"] ?? "", score: score2 },
-    },
-  });
-  //for each client, write response as new score for both users
-  sse_clients.forEach((client) => {
-    client["response"].write("data: " + score_update + "\n\n");
-  });
-}, 1000);
+const broadcastScore =
+  setInterval(() => {
+    broadcastSse({
+      type: "UPDATE_SCORE",
+
+      payload: {
+        player1: {
+          username:
+            players[0]
+              ?.username ?? "",
+          score: score1,
+        },
+
+        player2: {
+          username:
+            players[1]
+              ?.username ?? "",
+          score: score2,
+        },
+      },
+    });
+  }, 1000);
 
 // SECTION: WEBSOCKET GAME MANAGER <-> RASPBERRY
 
