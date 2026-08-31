@@ -131,7 +131,14 @@ const gameCycle = setInterval(async () => {
   else if (game_state == GAME_STATE.SEND_CONFIRM) {
     // Check if received 2 confirmation response
     // Check if received confirmation responses
-    if (confirmation_timer == 0) {
+
+    const expectedPlayers = numPlayers * 2;
+
+    const allResponded = players.length >= expectedPlayers;
+
+    const confirmationExpired = confirmation_timer <= 0;
+
+    if (allResponded || confirmationExpired) {
       // time's up
       let numAccepted = 0;
 
@@ -246,7 +253,9 @@ const gameCycle = setInterval(async () => {
         players.splice(0, players.length); // clear players array
       }
     }
-    confirmation_timer--;
+    if (game_state === GAME_STATE.SEND_CONFIRM && confirmation_timer > 0) {
+      confirmation_timer--;
+    }
   } else if (game_state == GAME_STATE.PLAYING) {
     // Check when timer reaches 0
     console.log(
