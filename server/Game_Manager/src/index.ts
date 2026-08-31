@@ -236,46 +236,91 @@ const gameCycle = setInterval(async () => {
           timer: timer_duration,
         });
       } else {
-        // did not get all accepts
+        /*
+         * The confirmation attempt failed because:
+         *
+         * - someone declined, or
+         * - someone did not respond before timeout.
+         *
+         * `players` only contains users who responded,
+         * so use the invited queue entries to determine
+         * who should stay and who should be removed.
+         */
 
-        // signal players to reset confirmation
-        for (let i = 0; i < players.length; i++) {
-          queue[i]["ws"].send(
-            JSON.stringify({
-              type: "MATCH_CONFIRMATION_RESET",
-              payload: "",
-            }),
-          );
-        }
+        const invitedPlayers = queue.slice(0, expectedPlayers);
 
-        let declinedArray = [];
-        // find the player(s) that declined/did not respond and remove from queue/close ws connection
-        for (let i = 0; i < players.length; i++) {
-          let index = players.findIndex((element) => {
-            return element["username"] === queue[i]["username"];
-          });
-          if (index == -1 || players[index]["accepted"] === false) {
-            queue[i]["ws"].close();
-            declinedArray.push(queue[i]["user_id"]);
+        console.log("[MATCH] Confirmation failed", {
+          expectedPlayers,
+          responses: players.length,
+          invited: invitedPlayers.map((player) => player.username),
+        });
+
+        /*
+         * Clear the confirmation overlay for every
+         * player who was invited, including users who
+         * never responded.
+         */
+        for (const queuedPlayer of invitedPlayers) {
+          if (queuedPlayer.ws.readyState === WebSocket.OPEN) {
+            queuedPlayer.ws.send(
+              JSON.stringify({
+                type: "MATCH_CONFIRMATION_RESET",
+                payload: "",
+              }),
+            );
           }
         }
 
-        // Remove players from queue
-        let num = queue.length;
+        /*
+         * Determine which invited users should be
+         * removed.
+         *
+         * Accepted       -> stays in queue
+         * Declined       -> removed
+         * No response    -> removed
+         */
+        const usersToRemove = new Set<string>();
 
-        for (let j = 0; j < declinedArray.length; j++) {
-          const ID = declinedArray[j];
+        for (const queuedPlayer of invitedPlayers) {
+          const response = players.find(
+            (player) => player.user_id === queuedPlayer.user_id,
+          );
 
-          for (let m = 0; m < num; m++) {
-            if (queue[m]["user_id"] === ID) {
-              queue.splice(m, 1);
-              num--;
+          if (!response || response.accepted === false) {
+            usersToRemove.add(queuedPlayer.user_id);
+
+            console.log(
+              `[MATCH] Removing ${queuedPlayer.username} - ${
+                response ? "declined" : "no response"
+              }`,
+            );
+          }
+        }
+
+        /*
+         * Remove declined/non-responsive users from
+         * the queue.
+         *
+         * Iterate backwards so splice() does not
+         * shift indexes that we have not checked yet.
+         */
+        for (let i = queue.length - 1; i >= 0; i--) {
+          if (usersToRemove.has(queue[i].user_id)) {
+            const socket = queue[i].ws;
+
+            queue.splice(i, 1);
+
+            if (
+              socket.readyState === WebSocket.OPEN ||
+              socket.readyState === WebSocket.CONNECTING
+            ) {
+              socket.close();
             }
           }
         }
 
         /*
-         * Confirmation attempt is finished.
+         * Reset this confirmation attempt.
          */
         players.splice(0, players.length);
 
