@@ -129,10 +129,6 @@ const {
 
 type Theme = "light" | "dark";
 
-interface SessionUser {
-  username?: string;
-  role?: string;
-}
 
 useHead({
   title: "Game | Soccer Robots",
@@ -155,49 +151,17 @@ const {
   logout: logoutSession,
 } = useAuth();
 
-const sruser = useCookie<SessionUser | string | null>("sruser");
 
 const accessPassword = useCookie<string | null>("accesspassword", {
   path: "/",
   sameSite: "lax",
 });
 
-const currentUser = computed<SessionUser | null>(() => {
-  const value = sruser.value;
-
-  if (!value) {
-    return null;
-  }
-
-  if (typeof value === "object") {
-    return value;
-  }
-
-  /*
-   * login.get.ts currently writes a username string, while auth.ts writes a
-   * JSON object. This supports both formats during the migration.
-   */
-  try {
-    const parsed = JSON.parse(value);
-
-    if (parsed && typeof parsed === "object") {
-      return parsed as SessionUser;
-    }
-  } catch {
-    // A plain string is treated as the username.
-  }
-
-  return {
-    username: value,
-  };
-});
-
 const showLoginRequest = ref(false);
 
 const openLoginPopup = () => {
-  loginRequestSuccess.value = false;
-  loginRequestError.value = "";
-
+  resetLoginRequest();
+  
   showLoginRequest.value = true;
 };
 
