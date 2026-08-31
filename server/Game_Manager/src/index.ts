@@ -149,12 +149,34 @@ const gameCycle = setInterval(async () => {
       }
 
       //checks if the amount of accepted players is equal to total number of players
-      if (numAccepted == numPlayers * 2) {
-        const isRaspberryConnected = () => {
-          return (
-            ws_raspberry !== null && ws_raspberry.readyState === WebSocket.OPEN
+      if (numAccepted == expectedPlayers) {
+        if (!isRaspberryConnected() || !robots_ready) {
+          console.log(
+            "[MATCH] Players accepted, but Raspberry is unavailable. Cancelling match start.",
           );
-        };
+
+          for (let i = 0; i < expectedPlayers; i++) {
+            if (queue[i]?.ws.readyState === WebSocket.OPEN) {
+              queue[i].ws.send(
+                JSON.stringify({
+                  type: "MATCH_CONFIRMATION_RESET",
+                  payload: "",
+                }),
+              );
+            }
+          }
+
+          players.splice(0, players.length);
+
+          confirmation_timer = 0;
+
+          game_state = GAME_STATE.NOT_PLAYING;
+
+          return;
+        }
+
+        game_state = GAME_STATE.NOT_PLAYING;
+        CONTROLLER_ACCESS = nanoid(); // new access code for each match
 
         // tell players to start the game
         for (let i = 0; i < players.length; i++) {
@@ -249,8 +271,6 @@ const gameCycle = setInterval(async () => {
             }
           }
         }
-        game_state = GAME_STATE.NOT_PLAYING;
-        players.splice(0, players.length); // clear players array
       }
     }
     if (game_state === GAME_STATE.SEND_CONFIRM && confirmation_timer > 0) {
