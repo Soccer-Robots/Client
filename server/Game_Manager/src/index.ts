@@ -31,7 +31,7 @@ const players: Array<{
 }> = [];
 const currentPlayers: Array<{ user_id: string; playernumber: any }> = [];
 let CONFIRMATION_PASSWORD: string = "";
-let CONTROLLER_ACCESS: string = ""; 
+let CONTROLLER_ACCESS: string = "";
 let timer: number = 0;
 let timer_duration: number = parseInt(`${process.env.TIMER_DURATION}`); // this is the initial timer duration, in seconds
 let confirmation_timer: number = 0; //tracks curent time that confirmation has been active.
@@ -120,14 +120,10 @@ const gameCycle = setInterval(async () => {
         confirmation_timer = confirmation_timer_duration;
       } else {
         // ask if robots are ready to play
-        ws_raspberry.send(
-          JSON.stringify({
-            type: "CHECK_READY",
-            payload: {
-              num_players: numPlayers * 2,
-            },
-          }),
-        );
+
+        sendToRaspberry("CHECK_READY", {
+          num_players: numPlayers * 2,
+        });
       }
     }
   }
@@ -147,8 +143,11 @@ const gameCycle = setInterval(async () => {
 
       //checks if the amount of accepted players is equal to total number of players
       if (numAccepted == numPlayers * 2) {
-        game_state = GAME_STATE.PLAYING;
-        CONTROLLER_ACCESS = nanoid(); // new access code for each game
+        const isRaspberryConnected = () => {
+          return (
+            ws_raspberry !== null && ws_raspberry.readyState === WebSocket.OPEN
+          );
+        };
 
         // tell players to start the game
         for (let i = 0; i < players.length; i++) {
@@ -204,12 +203,9 @@ const gameCycle = setInterval(async () => {
 
         console.log("Timer duration: " + timer_duration);
         // tell Raspberry server to start the game
-        ws_raspberry.send(
-          JSON.stringify({
-            type: "GAME_START",
-            payload: { timer: timer_duration },
-          }),
-        );
+        sendToRaspberry("GAME_START", {
+          timer: timer_duration,
+        });
       } else {
         // did not get all accepts
 
@@ -670,57 +666,165 @@ const broadcastScore = setInterval(() => {
 }, 1000);
 
 // SECTION: WEBSOCKET GAME MANAGER <-> RASPBERRY
-// Make sure to set up Raspberry server first
-const ws_raspberry = new WebSocket(`ws://${PI_ADDR}:${PORT_GM_RASPBERRY}`);
 
-ws_raspberry.onopen = (event) => {
-  console.log(`WS_RASPBERRY CONNECTED ws://${PI_ADDR}:${PORT_GM_RASPBERRY}`);
+let ws_raspberry: WebSocket | null = null;
+const isRaspberryConnected = () => {
+  return ws_raspberry !== null && ws_raspberry.readyState === WebSocket.OPEN;
 };
 
-ws_raspberry.onerror = (error) => {
-  console.log("WS_RASPBERRY error: ", error);
-};
-ws_raspberry.onclose = (event) => {
-  console.log("WS_RASPBERRY closed");
+let raspberryReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+const RASPBERRY_RECONNECT_DELAY = 2000;
+
+const scheduleRaspberryReconnect = () => {
+  if (raspberryReconnectTimer) {
+    return;
+  }
+
+  console.log(
+    `[RASPBERRY] Reconnecting in ${
+      RASPBERRY_RECONNECT_DELAY / 1000
+    } seconds...`,
+  );
+
+  raspberryReconnectTimer = setTimeout(() => {
+    raspberryReconnectTimer = null;
+
+    connectRaspberry();
+  }, RASPBERRY_RECONNECT_DELAY);
 };
 
-//when the reaspberry pi sends a message to the game manager
-ws_raspberry.onmessage = (event) => {
-  const { type, payload } = JSON.parse(event.data.toString());
-  // console.log(`Received message => ${type} : ${payload}`)
+const connectRaspberry = () => {
+  /*
+   * Don't create another connection if one
+   * is already open or currently connecting.
+   */
+  if (
+    ws_raspberry &&
+    (ws_raspberry.readyState === WebSocket.OPEN ||
+      ws_raspberry.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
 
-  //if the message is that the robots are ready, set robots_ready = true
-  if (type === "IS_READY") {
-    robots_ready = payload;
-    console.log(`Received message => ${type} : ${payload}`);
-  }
-  //if it's updating the timer, update that timer
-  else if (type === "TIMER_UPDATE") {
-    const { timer: timerUpdate }: { timer: number } = payload;
-    timer = timerUpdate;
-    console.log(`Received message => ${type} : ${timerUpdate}`);
-  }
-  //else if a player scores, update that
-  else if (type === "SCORE_UPDATE") {
-    const {
-      score1: s1Update,
-      score2: s2Update,
-    }: { score1: number; score2: number } = payload;
-    score1 = s1Update;
-    score2 = s2Update;
-    console.log(`Received message => ${type} : ${score1} ${score2}`);
-  }
-  //else if the game is ove, get scores and final time at the end, and save it
-  else if (type === "GAME_END") {
-    const {
-      timer: finalTimer,
-      score1: s1final,
-      score2: s2final,
-    }: { timer: number; score1: number; score2: number } = payload;
-    // "payload": {"timer": 0, "score1": 0, "score2": 0}
-    timer = finalTimer;
-    score1 = s1final;
-    score2 = s2final;
-    game_state = GAME_STATE.RESETTING;
-  }
+  const url = `ws://${PI_ADDR}:${PORT_GM_RASPBERRY}`;
+
+  console.log(`[RASPBERRY] Connecting to ${url}`);
+
+  const socket = new WebSocket(url);
+
+  ws_raspberry = socket;
+
+  socket.onopen = () => {
+    console.log(`[RASPBERRY] CONNECTED ${url}`);
+
+    /*
+     * We do not assume the robots are ready
+     * just because the WebSocket connected.
+     * Game Manager must receive IS_READY.
+     */
+    robots_ready = false;
+  };
+
+  socket.onerror = (error) => {
+    console.log("[RASPBERRY] WebSocket error:", error);
+  };
+
+  socket.onclose = () => {
+    console.log("[RASPBERRY] WebSocket closed");
+
+    /*
+     * If this is still the current socket,
+     * clear it.
+     */
+    if (ws_raspberry === socket) {
+      ws_raspberry = null;
+    }
+
+    /*
+     * A disconnected Raspberry should never
+     * remain marked as ready.
+     */
+    robots_ready = false;
+
+    scheduleRaspberryReconnect();
+  };
+
+  socket.onmessage = (event) => {
+    try {
+      const { type, payload } = JSON.parse(event.data.toString());
+
+      if (type === "IS_READY") {
+        robots_ready = payload;
+
+        console.log(`Received message => ${type} : ${payload}`);
+      } else if (type === "TIMER_UPDATE") {
+        const {
+          timer: timerUpdate,
+        }: {
+          timer: number;
+        } = payload;
+
+        timer = timerUpdate;
+
+        console.log(`Received message => ${type} : ${timerUpdate}`);
+      } else if (type === "SCORE_UPDATE") {
+        const {
+          score1: s1Update,
+          score2: s2Update,
+        }: {
+          score1: number;
+          score2: number;
+        } = payload;
+
+        score1 = s1Update;
+        score2 = s2Update;
+
+        console.log(`Received message => ${type} : ${score1} ${score2}`);
+      } else if (type === "GAME_END") {
+        const {
+          timer: finalTimer,
+          score1: s1Final,
+          score2: s2Final,
+        }: {
+          timer: number;
+          score1: number;
+          score2: number;
+        } = payload;
+
+        timer = finalTimer;
+        score1 = s1Final;
+        score2 = s2Final;
+
+        game_state = GAME_STATE.RESETTING;
+      }
+    } catch (error) {
+      console.error("[RASPBERRY] Invalid message:", event.data, error);
+    }
+  };
 };
+
+const sendToRaspberry = (type: string, payload: unknown) => {
+  const socket = ws_raspberry;
+
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    console.log(`[RASPBERRY] Unable to send ${type} - socket is not connected`);
+
+    return false;
+  }
+
+  socket.send(
+    JSON.stringify({
+      type,
+      payload,
+    }),
+  );
+
+  return true;
+};
+
+/*
+ * Make the initial connection when Game
+ * Manager starts.
+ */
+connectRaspberry();
