@@ -30,16 +30,16 @@ const players: Array<{
   accepted: boolean;
 }> = [];
 const currentPlayers: Array<{ user_id: string; playernumber: any }> = [];
-let CONFIRMATION_PASSWORD: string = "sousounofrieren"; // "Tearful goodbyes aren’t our style. It’d be embarrassing when we meet again"
-let CONTROLLER_ACCESS: string = "donutvampire"; // the initial value does not do anything here
+let CONFIRMATION_PASSWORD: string = "";
+let CONTROLLER_ACCESS: string = ""; 
 let timer: number = 0;
 let timer_duration: number = parseInt(`${process.env.TIMER_DURATION}`); // this is the initial timer duration, in seconds
 let confirmation_timer: number = 0; //tracks curent time that confirmation has been active.
 const confirmation_timer_duration: number = parseInt(
   `${process.env.CONFIRMATION_TIMER_DURATION}`,
 ); // this is the time given to players to confirm, in seconds
-let score1: number = 8;
-let score2: number = 5;
+let score1: number = 0;
+let score2: number = 0;
 enum GAME_STATE {
   NOT_PLAYING,
   SEND_CONFIRM,
@@ -48,8 +48,7 @@ enum GAME_STATE {
 }
 let game_state: GAME_STATE = GAME_STATE.NOT_PLAYING;
 
-// let robots_ready: boolean = false
-let robots_ready: boolean = true; // for testing purposes, set to true. Change to false when testing with actual robots
+let robots_ready: boolean = false;
 let numPlayers: number = 1; // for now, only 1v1 is supported. Change to 2 for 2v2, etc. This is set in the match settings in the database.
 
 // Match Settings
@@ -401,12 +400,12 @@ const gameCycle = setInterval(async () => {
     players.splice(0, 2);
     //makes it so now there's no players curerntlyl anymore
     currentPlayers.length = 0;
+    score1 = 0;
+    score2 = 0;
     //now that game just ended robots are not ready until the raspberry pi says so.
     robots_ready = false;
     timer = 0;
-    //no idea why we do this, have to investigate
-    score1 = score1 - 3;
-    score2 = score2;
+
     game_state = GAME_STATE.NOT_PLAYING;
   }
 }, 1000);

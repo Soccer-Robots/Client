@@ -107,13 +107,12 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
-  reactive,
   ref,
-  shallowRef,
   watch,
 } from "vue";
 import { useGameFeed } from "~/composables/useGameFeed";
 import { useMatchQueue } from "~/composables/useMatchQueue";
+import {useRobotController} from "~/composables/useRobotController";
 
 type LeaderboardSort = "wins" | "losses" | "goals" | "gamesPlayed" | "ratio";
 
@@ -367,6 +366,39 @@ const streamType = computed<"twitch" | "janus">(() => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Robot controller                                                           */
+/* -------------------------------------------------------------------------- */
+
+const {
+  controllerStatus,
+  keyState,
+  connectController,
+  disconnectController,
+} = useRobotController({
+  isLoggedIn,
+  isInGame,
+  accessPassword,
+});
+
+const endGame = () => {
+  isInGame.value = false;
+  accessPassword.value = null;
+
+  disconnectController();
+};
+
+const handleMatchStart = async (
+  password: string,
+) => {
+  accessPassword.value = password;
+  isInGame.value = true;
+
+  await nextTick();
+
+  connectController();
+};
+
+/* -------------------------------------------------------------------------- */
 /* Service URLs                                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -415,196 +447,6 @@ const parseMessage = (value: unknown): SocketMessage | null => {
   }
 };
 
-/* -------------------------------------------------------------------------- */
-/* Robot controller WebSocket                                                 */
-/* -------------------------------------------------------------------------- */
-
-const controllerSocket = shallowRef<WebSocket | null>(null);
-const controllerStatus = ref<ConnectionStatus>("disconnected");
-
-const controlKeys = ["w", "a", "s", "d"] as const;
-
-const keyState = reactive<Record<ControlKey, 0 | 1>>({
-  w: 0,
-  a: 0,
-  s: 0,
-  d: 0,
-});
-
-const currentKeyPayload = computed(() => {
-  return `${keyState.w}${keyState.a}${keyState.s}${keyState.d}`;
-});
-
-const isControlKey = (key: string): key is ControlKey => {
-  return controlKeys.includes(key as ControlKey);
-};
-
-const isEditableElement = (target: EventTarget | null) => {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  return (
-    target.isContentEditable ||
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT"
-  );
-};
-
-const sendKeyState = () => {
-  const socket = controllerSocket.value;
-
-  if (socket?.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  socket.send(
-    JSON.stringify({
-      type: "KEY_INPUT",
-      payload: currentKeyPayload.value,
-    }),
-  );
-};
-
-const resetKeyState = (sendUpdate = true) => {
-  keyState.w = 0;
-  keyState.a = 0;
-  keyState.s = 0;
-  keyState.d = 0;
-
-  if (sendUpdate) {
-    sendKeyState();
-  }
-};
-
-const handleKeyDown = (event: KeyboardEvent) => {
-  if (!isInGame.value || event.repeat || isEditableElement(event.target)) {
-    return;
-  }
-
-  const key = event.key.toLowerCase();
-
-  if (!isControlKey(key)) {
-    return;
-  }
-
-  event.preventDefault();
-
-  if (keyState[key] === 1) {
-    return;
-  }
-
-  keyState[key] = 1;
-  sendKeyState();
-};
-
-const handleKeyUp = (event: KeyboardEvent) => {
-  const key = event.key.toLowerCase();
-
-  if (!isControlKey(key)) {
-    return;
-  }
-
-  if (isInGame.value) {
-    event.preventDefault();
-  }
-
-  if (keyState[key] === 0) {
-    return;
-  }
-
-  keyState[key] = 0;
-  sendKeyState();
-};
-
-const handleWindowBlur = () => {
-  resetKeyState();
-};
-
-const connectController = () => {
-  if (!import.meta.client) {
-    return;
-  }
-
-  if (!isLoggedIn.value || !accessPassword.value) {
-    controllerStatus.value = "error";
-    return;
-  }
-
-  if (
-    controllerSocket.value &&
-    (controllerSocket.value.readyState === WebSocket.OPEN ||
-      controllerSocket.value.readyState === WebSocket.CONNECTING)
-  ) {
-    return;
-  }
-
-  try {
-    controllerStatus.value = "connecting";
-
-    const socket = new WebSocket(
-      createWebSocketUrl(config.public.PORT_WSS_CONTROLLER_CLIENT),
-    );
-
-    controllerSocket.value = socket;
-
-    socket.onopen = () => {
-      controllerStatus.value = "connected";
-      resetKeyState();
-    };
-
-    socket.onerror = (event) => {
-      console.error("Controller WebSocket error:", event);
-      controllerStatus.value = "error";
-    };
-
-    socket.onclose = () => {
-      if (controllerSocket.value === socket) {
-        controllerSocket.value = null;
-      }
-
-      resetKeyState(false);
-      controllerStatus.value = "disconnected";
-    };
-
-    socket.onmessage = (event) => {
-      console.log("Controller message:", event.data);
-    };
-  } catch (error) {
-    console.error("Failed to connect to controller:", error);
-    controllerStatus.value = "error";
-  }
-};
-
-const disconnectController = () => {
-  resetKeyState();
-
-  controllerSocket.value?.close();
-  controllerSocket.value = null;
-
-  controllerStatus.value =
-    "disconnected";
-};
-
-const endGame = () => {
-  isInGame.value = false;
-  accessPassword.value = null;
-
-  disconnectController();
-};
-
-const handleMatchStart = async (
-  password: string,
-) => {
-  accessPassword.value = password;
-
-  isInGame.value = true;
-
-  await nextTick();
-
-  connectController();
-};
 
 /* -------------------------------------------------------------------------- */
 /* Match queue                                                                */
@@ -710,10 +552,6 @@ onMounted(() => {
   connectGameFeed();
   void loadLeaderboard();
 
-  window.addEventListener("keydown", handleKeyDown);
-  window.addEventListener("keyup", handleKeyUp);
-  window.addEventListener("blur", handleWindowBlur);
-
   /*
    * Restore a controller connection when the user reloads during an active
    * match and still has the temporary access cookie.
@@ -725,12 +563,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleKeyDown);
-  window.removeEventListener("keyup", handleKeyUp);
-  window.removeEventListener("blur", handleWindowBlur);
 
   disconnectGameFeed();
   disconnectQueue(false);
-  disconnectController();
 });
 </script>
