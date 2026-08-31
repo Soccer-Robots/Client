@@ -51,6 +51,8 @@ let game_state: GAME_STATE = GAME_STATE.NOT_PLAYING;
 let robots_ready: boolean = false;
 let numPlayers: number = 1; // for now, only 1v1 is supported. Change to 2 for 2v2, etc. This is set in the match settings in the database.
 
+// List of Helper functions
+
 // Match Settings
 const matchSettings = async () => {
   const response = await prisma.matchSettings.findFirst({
@@ -72,64 +74,36 @@ const matchSettings = async () => {
 };
 
 const sendMatchConfirmation = () => {
-  const expectedPlayers =
-    numPlayers * 2;
+  const expectedPlayers = numPlayers * 2;
 
   /*
    * Make sure enough players still exist
    * before starting a confirmation round.
    */
-  if (
-    queue.length <
-    expectedPlayers
-  ) {
-    console.log(
-      "[MATCH] Not enough players to send confirmation",
-    );
+  if (queue.length < expectedPlayers) {
+    console.log("[MATCH] Not enough players to send confirmation");
 
     return;
   }
 
-  game_state =
-    GAME_STATE.SEND_CONFIRM;
+  game_state = GAME_STATE.SEND_CONFIRM;
 
-  CONFIRMATION_PASSWORD =
-    nanoid();
+  CONFIRMATION_PASSWORD = nanoid();
 
-  confirmation_timer =
-    confirmation_timer_duration;
+  confirmation_timer = confirmation_timer_duration;
 
-  const invitedPlayers =
-    queue.slice(
-      0,
-      expectedPlayers,
-    );
+  const invitedPlayers = queue.slice(0, expectedPlayers);
 
-  console.log(
-    "[MATCH] Sending MATCH_CONFIRMATION",
-    {
-      password:
-        CONFIRMATION_PASSWORD,
+  console.log("[MATCH] Sending MATCH_CONFIRMATION", {
+    password: CONFIRMATION_PASSWORD,
 
-      players:
-        invitedPlayers.map(
-          (player) =>
-            player.username,
-        ),
+    players: invitedPlayers.map((player) => player.username),
 
-      confirmationTimer:
-        confirmation_timer,
-    },
-  );
+    confirmationTimer: confirmation_timer,
+  });
 
-  for (
-    const player of
-      invitedPlayers
-  ) {
-    if (
-      player.ws.readyState !==
-      WebSocket.OPEN
-    ) {
+  for (const player of invitedPlayers) {
+    if (player.ws.readyState !== WebSocket.OPEN) {
       console.log(
         `[MATCH] Unable to send confirmation to ${player.username} - socket not open`,
       );
@@ -137,20 +111,428 @@ const sendMatchConfirmation = () => {
       continue;
     }
 
-    console.log(
-      `[MATCH] Sending confirmation to ${player.username}`,
-    );
+    console.log(`[MATCH] Sending confirmation to ${player.username}`);
 
     player.ws.send(
       JSON.stringify({
-        type:
-          "MATCH_CONFIRMATION",
+        type: "MATCH_CONFIRMATION",
 
-        payload:
-          CONFIRMATION_PASSWORD,
+        payload: CONFIRMATION_PASSWORD,
       }),
     );
   }
+};
+
+const resetMatchConfirmation = () => {
+  console.log("[MATCH] Resetting confirmation state");
+
+  players.splice(0, players.length);
+
+  confirmation_timer = 0;
+
+  /*
+   * Invalidate the password from the
+   * previous confirmation attempt.
+   */
+  CONFIRMATION_PASSWORD = "";
+
+  game_state = GAME_STATE.NOT_PLAYING;
+};
+
+const startMatch = async (expectedPlayers: number) => {
+  console.log("[MATCH] Starting match");
+
+  game_state = GAME_STATE.PLAYING;
+
+  CONTROLLER_ACCESS = nanoid();
+  // --------------------------------------------------
+  // Build currentPlayers
+  // --------------------------------------------------
+
+  // tell players to start the game
+  for (let i = 0; i < players.length; i++) {
+    let newPlayer = {
+      user_id: players[i]["user_id"],
+      playernumber: i,
+    };
+    currentPlayers.push(newPlayer);
+  }
+
+  // --------------------------------------------------
+  // Give Controller the access password
+  // --------------------------------------------------
+
+  // tell Controller server to change access code
+  await fetch(
+    `http://${LOCALHOST}:${PORT_EXPRESS_CONTROLLER_GAMEMANAGER}/accesspassword`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accesspassword: CONTROLLER_ACCESS,
+      }),
+    },
+  );
+  // authorize players in Controller server to send key inputs
+  await fetch(
+    `http://${LOCALHOST}:${PORT_EXPRESS_CONTROLLER_GAMEMANAGER}/addusers`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(currentPlayers),
+    },
+  );
+
+  for (let i = 0; i < currentPlayers.length; i++) {
+    if (queue[i] == null) {
+      console.log("ok dawg its undefed at index " + i);
+    }
+  }
+
+  // --------------------------------------------------
+  // Tell matched clients the game started
+  // --------------------------------------------------
+
+  // give players the access code to connect to Controller server WebSocket
+  for (let i = 0; i < currentPlayers.length; i++) {
+    queue[i].ws.send(
+      JSON.stringify({
+        type: "MATCH_START",
+        payload: CONTROLLER_ACCESS,
+      }),
+    );
+  }
+
+  // --------------------------------------------------
+  // Remove matched users from queue
+  // --------------------------------------------------
+
+  // close ws because players are not in queue anymore
+  for (let i = 0; i < currentPlayers.length; i++) {
+    queue[i]["ws"].close();
+  }
+  queue.splice(0, currentPlayers.length);
+
+  // --------------------------------------------------
+  // Start Raspberry game
+  // --------------------------------------------------
+
+  sendToRaspberry("GAME_START", {
+    timer: timer_duration,
+  });
+
+  console.log("[MATCH] Game started", {
+    expectedPlayers,
+    timer: timer_duration,
+  });
+};
+
+const handleFailedConfirmation = (expectedPlayers: number) => {
+  /*
+   * The confirmation attempt failed because:
+   *
+   * - someone declined, or
+   * - someone did not respond before timeout.
+   */
+
+  const invitedPlayers = queue.slice(0, expectedPlayers);
+
+  console.log("[MATCH] Confirmation failed", {
+    expectedPlayers,
+    responses: players.length,
+    invited: invitedPlayers.map((player) => player.username),
+  });
+
+  /*
+   * Clear the confirmation overlay for every
+   * invited player.
+   */
+  for (const queuedPlayer of invitedPlayers) {
+    if (queuedPlayer.ws.readyState === WebSocket.OPEN) {
+      queuedPlayer.ws.send(
+        JSON.stringify({
+          type: "MATCH_CONFIRMATION_RESET",
+          payload: "",
+        }),
+      );
+    }
+  }
+
+  /*
+   * Accepted players stay queued.
+   *
+   * Declined players and players who never
+   * responded are removed.
+   */
+  const usersToRemove = new Set<string>();
+
+  for (const queuedPlayer of invitedPlayers) {
+    const response = players.find(
+      (player) => player.user_id === queuedPlayer.user_id,
+    );
+
+    if (!response || response.accepted === false) {
+      usersToRemove.add(queuedPlayer.user_id);
+
+      console.log(
+        `[MATCH] Removing ${queuedPlayer.username} - ${
+          response ? "declined" : "no response"
+        }`,
+      );
+    }
+  }
+
+  /*
+   * Iterate backwards because queue.splice()
+   * changes indexes.
+   */
+  for (let i = queue.length - 1; i >= 0; i--) {
+    if (!usersToRemove.has(queue[i].user_id)) {
+      continue;
+    }
+
+    const socket = queue[i].ws;
+
+    queue.splice(i, 1);
+
+    if (
+      socket.readyState === WebSocket.OPEN ||
+      socket.readyState === WebSocket.CONNECTING
+    ) {
+      socket.close();
+    }
+  }
+
+  resetMatchConfirmation();
+};
+const resetGame = async () => {
+  console.log("[MATCH] Resetting completed game");
+
+  // Game end: remove players from authorization in Controller server and clear player array
+  await fetch(
+    `http://${LOCALHOST}:${PORT_EXPRESS_CONTROLLER_GAMEMANAGER}/removeusers`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      //sending both users and their user id
+      body: JSON.stringify({
+        users: [
+          { user_id: players[0]["user_id"] },
+          { user_id: players[1]["user_id"] },
+        ],
+      }),
+    },
+  );
+
+  /*
+   * MOVE the database/stat update code from
+   * your current RESETTING state here.
+   *
+   * Keep the order exactly the same for now.
+   */
+
+  // MOVE your existing Prisma Match create/update
+  // logic here.
+
+  // --------------------------------------------------
+  // Save completed match
+  // --------------------------------------------------
+
+  // store played match in database
+  await prisma.match.create({
+    data: {
+      //date of match is right now
+      datetime: new Date(),
+
+      // these are the players who played and their scores
+      players: {
+        create: [
+          {
+            playerID: players[0]["user_id"],
+            playerScore: score1,
+          },
+          {
+            playerID: players[1]["user_id"],
+            playerScore: score2,
+          },
+        ],
+      },
+    },
+  });
+
+  // --------------------------------------------------
+  // Update player statistics
+  // --------------------------------------------------
+
+  //finds player in the databases
+  const [player1, player2] = await prisma.$transaction([
+    prisma.player.findFirst({
+      where: { user_id: players[0]["user_id"] },
+    }),
+    prisma.player.findFirst({
+      where: { user_id: players[1]["user_id"] },
+    }),
+  ]);
+
+  // changes database values based on which player wins
+  if (score1 > score2) {
+    //update W/L ratio of player 1 by increasing their wins if they won.
+    //wif they have no losses, then we'd be dividing by 0, so here we avoid that. In such a case,
+    //we just set it to their # of wins.
+    let ratio1 = (player1 as PlayerType).losses
+      ? ((player1 as PlayerType).wins + 1) / (player1 as PlayerType).losses
+      : ++(player1 as PlayerType).wins;
+
+    await prisma.$transaction([
+      prisma.player.update({
+        where: { user_id: players[0]["user_id"] },
+        data: {
+          //obvious stuff
+          wins: { increment: 1 },
+          games: { increment: 1 },
+          ratio: ratio1,
+          goals: { increment: score1 },
+        },
+      }),
+
+      //now for user two, add loss and update ratio
+      prisma.player.update({
+        where: { user_id: players[1]["user_id"] },
+        data: {
+          losses: { increment: 1 },
+          games: { increment: 1 },
+          ratio:
+            (player2 as PlayerType).wins / ((player2 as PlayerType).losses + 1),
+          goals: { increment: score2 },
+        },
+      }),
+    ]);
+  }
+  //if player two won
+  else if (score2 > score1) {
+    //same idea as above, don't divide by 0
+    let ratio2 = (player2 as PlayerType).losses
+      ? ((player2 as PlayerType).wins + 1) / (player2 as PlayerType).losses
+      : ++(player2 as PlayerType).wins;
+    await prisma.$transaction([
+      prisma.player.update({
+        where: { user_id: players[0]["user_id"] },
+        data: {
+          losses: { increment: 1 },
+          games: { increment: 1 },
+          ratio:
+            (player1 as PlayerType).wins / ((player1 as PlayerType).losses + 1),
+          goals: { increment: score1 },
+        },
+      }),
+
+      prisma.player.update({
+        where: { user_id: players[1]["user_id"] },
+        data: {
+          wins: { increment: 1 },
+          games: { increment: 1 },
+          ratio: ratio2,
+          goals: { increment: score2 },
+        },
+      }),
+    ]);
+  }
+  //else if they both tied. NOTE: PROBABLY WANT TO ADD # OF TIES IN GAMES
+  else {
+    await prisma.$transaction([
+      prisma.player.update({
+        where: { user_id: players[0]["user_id"] },
+        data: {
+          //just increment games and goals, since they neither won nor lost
+          games: { increment: 1 },
+          goals: { increment: score1 },
+        },
+      }),
+
+      prisma.player.update({
+        where: { user_id: players[1]["user_id"] },
+        data: {
+          games: { increment: 1 },
+          goals: { increment: score2 },
+        },
+      }),
+    ]);
+  }
+
+  // --------------------------------------------------
+  // Clear active match state
+  // --------------------------------------------------
+
+  //remove them from the player queue
+  //makes it so now there's no players curerntlyl anymore
+  currentPlayers.length = 0;
+  score1 = 0;
+  score2 = 0;
+  //now that game just ended robots are not ready until the raspberry pi says so.
+  robots_ready = false;
+
+  players.splice(0, players.length);
+
+  currentPlayers.splice(0, currentPlayers.length);
+
+  robots_ready = false;
+
+  timer = 0;
+
+  score1 = 0;
+  score2 = 0;
+
+  /*
+   * Temporary controller authorization should
+   * not survive a completed match.
+   */
+  CONTROLLER_ACCESS = "";
+
+  game_state = GAME_STATE.NOT_PLAYING;
+
+  console.log("[MATCH] Game reset complete");
+};
+
+const cancelConfirmation = (expectedPlayers: number, reason: string) => {
+  console.log(`[MATCH] Cancelling confirmation: ${reason}`);
+
+  const invitedPlayers = queue.slice(0, expectedPlayers);
+
+  for (const player of invitedPlayers) {
+    if (player.ws.readyState === WebSocket.OPEN) {
+      player.ws.send(
+        JSON.stringify({
+          type: "MATCH_CONFIRMATION_RESET",
+          payload: "",
+        }),
+      );
+    }
+  }
+
+  resetMatchConfirmation();
+};
+const resolveMatchConfirmation = async (expectedPlayers: number) => {
+  const numAccepted = players.filter((player) => player.accepted).length;
+
+  console.log("[MATCH] Resolving confirmation", {
+    expectedPlayers,
+    responses: players.length,
+    accepted: numAccepted,
+  });
+
+  if (numAccepted !== expectedPlayers) {
+    handleFailedConfirmation(expectedPlayers);
+
+    return;
+  }
+
+  if (!isRaspberryConnected() || !robots_ready) {
+    cancelConfirmation(expectedPlayers, "Raspberry unavailable");
+
+    return;
+  }
+
+  await startMatch(expectedPlayers);
 };
 
 // SECTION: GAME CYCLES
@@ -184,195 +566,8 @@ const gameCycle = setInterval(async () => {
     const confirmationExpired = confirmation_timer <= 0;
 
     if (allResponded || confirmationExpired) {
-      // time's up
-      let numAccepted = 0;
-
-      for (let i = 0; i < players.length; i++) {
-        if (players[i]["accepted"]) {
-          numAccepted++;
-        }
-      }
-
-      //checks if the amount of accepted players is equal to total number of players
-      if (numAccepted == expectedPlayers) {
-        if (!isRaspberryConnected() || !robots_ready) {
-          console.log(
-            "[MATCH] Players accepted, but Raspberry is unavailable. Cancelling match start.",
-          );
-
-          for (let i = 0; i < expectedPlayers; i++) {
-            if (queue[i]?.ws.readyState === WebSocket.OPEN) {
-              queue[i].ws.send(
-                JSON.stringify({
-                  type: "MATCH_CONFIRMATION_RESET",
-                  payload: "",
-                }),
-              );
-            }
-          }
-
-          players.splice(0, players.length);
-
-          confirmation_timer = 0;
-
-          game_state = GAME_STATE.NOT_PLAYING;
-
-          return;
-        }
-
-        game_state = GAME_STATE.PLAYING;
-        CONTROLLER_ACCESS = nanoid(); // new access code for each match
-
-        // tell players to start the game
-        for (let i = 0; i < players.length; i++) {
-          let newPlayer = {
-            user_id: players[i]["user_id"],
-            playernumber: i,
-          };
-          currentPlayers.push(newPlayer);
-        }
-
-        // tell Controller server to change access code
-        await fetch(
-          `http://${LOCALHOST}:${PORT_EXPRESS_CONTROLLER_GAMEMANAGER}/accesspassword`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              accesspassword: CONTROLLER_ACCESS,
-            }),
-          },
-        );
-        // authorize players in Controller server to send key inputs
-        await fetch(
-          `http://${LOCALHOST}:${PORT_EXPRESS_CONTROLLER_GAMEMANAGER}/addusers`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(currentPlayers),
-          },
-        );
-
-        for (let i = 0; i < currentPlayers.length; i++) {
-          if (queue[i] == null) {
-            console.log("ok dawg its undefed at index " + i);
-          }
-        }
-
-        // give players the access code to connect to Controller server WebSocket
-        for (let i = 0; i < currentPlayers.length; i++) {
-          queue[i].ws.send(
-            JSON.stringify({
-              type: "MATCH_START",
-              payload: CONTROLLER_ACCESS,
-            }),
-          );
-        }
-        // close ws because players are not in queue anymore
-        for (let i = 0; i < currentPlayers.length; i++) {
-          queue[i]["ws"].close();
-        }
-        queue.splice(0, currentPlayers.length);
-        timer = timer_duration;
-
-        console.log("Timer duration: " + timer_duration);
-        // tell Raspberry server to start the game
-        sendToRaspberry("GAME_START", {
-          timer: timer_duration,
-        });
-      } else {
-        /*
-         * The confirmation attempt failed because:
-         *
-         * - someone declined, or
-         * - someone did not respond before timeout.
-         *
-         * `players` only contains users who responded,
-         * so use the invited queue entries to determine
-         * who should stay and who should be removed.
-         */
-
-        const invitedPlayers = queue.slice(0, expectedPlayers);
-
-        console.log("[MATCH] Confirmation failed", {
-          expectedPlayers,
-          responses: players.length,
-          invited: invitedPlayers.map((player) => player.username),
-        });
-
-        /*
-         * Clear the confirmation overlay for every
-         * player who was invited, including users who
-         * never responded.
-         */
-        for (const queuedPlayer of invitedPlayers) {
-          if (queuedPlayer.ws.readyState === WebSocket.OPEN) {
-            queuedPlayer.ws.send(
-              JSON.stringify({
-                type: "MATCH_CONFIRMATION_RESET",
-                payload: "",
-              }),
-            );
-          }
-        }
-
-        /*
-         * Determine which invited users should be
-         * removed.
-         *
-         * Accepted       -> stays in queue
-         * Declined       -> removed
-         * No response    -> removed
-         */
-        const usersToRemove = new Set<string>();
-
-        for (const queuedPlayer of invitedPlayers) {
-          const response = players.find(
-            (player) => player.user_id === queuedPlayer.user_id,
-          );
-
-          if (!response || response.accepted === false) {
-            usersToRemove.add(queuedPlayer.user_id);
-
-            console.log(
-              `[MATCH] Removing ${queuedPlayer.username} - ${
-                response ? "declined" : "no response"
-              }`,
-            );
-          }
-        }
-
-        /*
-         * Remove declined/non-responsive users from
-         * the queue.
-         *
-         * Iterate backwards so splice() does not
-         * shift indexes that we have not checked yet.
-         */
-        for (let i = queue.length - 1; i >= 0; i--) {
-          if (usersToRemove.has(queue[i].user_id)) {
-            const socket = queue[i].ws;
-
-            queue.splice(i, 1);
-
-            if (
-              socket.readyState === WebSocket.OPEN ||
-              socket.readyState === WebSocket.CONNECTING
-            ) {
-              socket.close();
-            }
-          }
-        }
-
-        /*
-         * Reset this confirmation attempt.
-         */
-        players.splice(0, players.length);
-
-        confirmation_timer = 0;
-
-        game_state = GAME_STATE.NOT_PLAYING;
-      }
+      await resolveMatchConfirmation(expectedPlayers);
+      
     }
     if (game_state === GAME_STATE.SEND_CONFIRM && confirmation_timer > 0) {
       confirmation_timer--;
@@ -388,151 +583,9 @@ const gameCycle = setInterval(async () => {
       game_state = GAME_STATE.RESETTING;
     }
   } else if (game_state == GAME_STATE.RESETTING) {
-    // Game end: remove players from authorization in Controller server and clear player array
-    await fetch(
-      `http://${LOCALHOST}:${PORT_EXPRESS_CONTROLLER_GAMEMANAGER}/removeusers`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        //sending both users and their user id
-        body: JSON.stringify({
-          users: [
-            { user_id: players[0]["user_id"] },
-            { user_id: players[1]["user_id"] },
-          ],
-        }),
-      },
-    );
+    await resetGame();
 
-    // store played match in database
-    await prisma.match.create({
-      data: {
-        //date of match is right now
-        datetime: new Date(),
-
-        // these are the players who played and their scores
-        players: {
-          create: [
-            {
-              playerID: players[0]["user_id"],
-              playerScore: score1,
-            },
-            {
-              playerID: players[1]["user_id"],
-              playerScore: score2,
-            },
-          ],
-        },
-      },
-    });
-
-    //finds player in the databases
-    const [player1, player2] = await prisma.$transaction([
-      prisma.player.findFirst({
-        where: { user_id: players[0]["user_id"] },
-      }),
-      prisma.player.findFirst({
-        where: { user_id: players[1]["user_id"] },
-      }),
-    ]);
-
-    // changes database values based on which player wins
-    if (score1 > score2) {
-      //update W/L ratio of player 1 by increasing their wins if they won.
-      //wif they have no losses, then we'd be dividing by 0, so here we avoid that. In such a case,
-      //we just set it to their # of wins.
-      let ratio1 = (player1 as PlayerType).losses
-        ? ((player1 as PlayerType).wins + 1) / (player1 as PlayerType).losses
-        : ++(player1 as PlayerType).wins;
-
-      await prisma.$transaction([
-        prisma.player.update({
-          where: { user_id: players[0]["user_id"] },
-          data: {
-            //obvious stuff
-            wins: { increment: 1 },
-            games: { increment: 1 },
-            ratio: ratio1,
-            goals: { increment: score1 },
-          },
-        }),
-
-        //now for user two, add loss and update ratio
-        prisma.player.update({
-          where: { user_id: players[1]["user_id"] },
-          data: {
-            losses: { increment: 1 },
-            games: { increment: 1 },
-            ratio:
-              (player2 as PlayerType).wins /
-              ((player2 as PlayerType).losses + 1),
-            goals: { increment: score2 },
-          },
-        }),
-      ]);
-    }
-    //if player two won
-    else if (score2 > score1) {
-      //same idea as above, don't divide by 0
-      let ratio2 = (player2 as PlayerType).losses
-        ? ((player2 as PlayerType).wins + 1) / (player2 as PlayerType).losses
-        : ++(player2 as PlayerType).wins;
-      await prisma.$transaction([
-        prisma.player.update({
-          where: { user_id: players[0]["user_id"] },
-          data: {
-            losses: { increment: 1 },
-            games: { increment: 1 },
-            ratio:
-              (player1 as PlayerType).wins /
-              ((player1 as PlayerType).losses + 1),
-            goals: { increment: score1 },
-          },
-        }),
-
-        prisma.player.update({
-          where: { user_id: players[1]["user_id"] },
-          data: {
-            wins: { increment: 1 },
-            games: { increment: 1 },
-            ratio: ratio2,
-            goals: { increment: score2 },
-          },
-        }),
-      ]);
-    }
-    //else if they both tied. NOTE: PROBABLY WANT TO ADD # OF TIES IN GAMES
-    else {
-      await prisma.$transaction([
-        prisma.player.update({
-          where: { user_id: players[0]["user_id"] },
-          data: {
-            //just increment games and goals, since they neither won nor lost
-            games: { increment: 1 },
-            goals: { increment: score1 },
-          },
-        }),
-
-        prisma.player.update({
-          where: { user_id: players[1]["user_id"] },
-          data: {
-            games: { increment: 1 },
-            goals: { increment: score2 },
-          },
-        }),
-      ]);
-    }
-    //remove them from the player queue
-    players.splice(0, 2);
-    //makes it so now there's no players curerntlyl anymore
-    currentPlayers.length = 0;
-    score1 = 0;
-    score2 = 0;
-    //now that game just ended robots are not ready until the raspberry pi says so.
-    robots_ready = false;
-    timer = 0;
-
-    game_state = GAME_STATE.NOT_PLAYING;
+    resetMatchConfirmation();
   }
 }, 1000);
 
@@ -783,52 +836,41 @@ app_sse.get("/sse-info", (request, response) => {
 // Broadcast Queue, Timer, and Score1/Score2
 
 //sets a loop running every second, which broadcasts the current queue to all the clients
-const broadcastQueue =
-  setInterval(() => {
-    const queue_users =
-      queue.map(
-        (user) =>
-          user.username,
-      );
+const broadcastQueue = setInterval(() => {
+  const queue_users = queue.map((user) => user.username);
 
-    broadcastSse({
-      type: "UPDATE_QUEUE",
-      payload: queue_users,
-    });
-  }, 1000);
+  broadcastSse({
+    type: "UPDATE_QUEUE",
+    payload: queue_users,
+  });
+}, 1000);
 
 //sets a loop running every second, broacsasting the current timer to all clients, regarldess of if they're in the queue
-const broadcastTimer =
-  setInterval(() => {
-    broadcastSse({
-      type: "UPDATE_TIMER",
-      payload: timer,
-    });
-  }, 1000);
+const broadcastTimer = setInterval(() => {
+  broadcastSse({
+    type: "UPDATE_TIMER",
+    payload: timer,
+  });
+}, 1000);
 
 //sets a loop running every second, broacasting the scores of both players currently.
-const broadcastScore =
-  setInterval(() => {
-    broadcastSse({
-      type: "UPDATE_SCORE",
+const broadcastScore = setInterval(() => {
+  broadcastSse({
+    type: "UPDATE_SCORE",
 
-      payload: {
-        player1: {
-          username:
-            players[0]
-              ?.username ?? "",
-          score: score1,
-        },
-
-        player2: {
-          username:
-            players[1]
-              ?.username ?? "",
-          score: score2,
-        },
+    payload: {
+      player1: {
+        username: players[0]?.username ?? "",
+        score: score1,
       },
-    });
-  }, 1000);
+
+      player2: {
+        username: players[1]?.username ?? "",
+        score: score2,
+      },
+    },
+  });
+}, 1000);
 
 // SECTION: WEBSOCKET GAME MANAGER <-> RASPBERRY
 
