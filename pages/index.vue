@@ -114,6 +114,7 @@ import { useGameFeed } from "~/composables/useGameFeed";
 import { useMatchQueue } from "~/composables/useMatchQueue";
 import { useRobotController } from "~/composables/useRobotController";
 import { useLeaderboard } from "~/composables/useLeaderboard";
+import { useAuth } from "~/composables/useAuth";
 
 /* -------------------------------------------------------------------------- */
 /* Leaderboard                                                                */
@@ -140,6 +141,19 @@ useHead({
 /* -------------------------------------------------------------------------- */
 /* Authentication                                                             */
 /* -------------------------------------------------------------------------- */
+
+const {
+  playerName,
+  isLoggedIn,
+  isAdmin,
+  isRequestingLogin,
+  loginRequestSuccess,
+  loginRequestError,
+  requestLogin,
+  resetLoginRequest,
+  isLoggingOut,
+  logout: logoutSession,
+} = useAuth();
 
 const sruser = useCookie<SessionUser | string | null>("sruser");
 
@@ -178,16 +192,7 @@ const currentUser = computed<SessionUser | null>(() => {
   };
 });
 
-const playerName = computed(() => currentUser.value?.username ?? "");
-const isLoggedIn = computed(() => Boolean(playerName.value));
-const isAdmin = computed(() => currentUser.value?.role === "admin");
-
-const isRequestingLogin = ref(false);
-const isLoggingOut = ref(false);
-
 const showLoginRequest = ref(false);
-const loginRequestSuccess = ref(false);
-const loginRequestError = ref("");
 
 const openLoginPopup = () => {
   loginRequestSuccess.value = false;
@@ -202,76 +207,7 @@ const closeLoginPopup = () => {
   }
 
   showLoginRequest.value = false;
-  loginRequestSuccess.value = false;
-  loginRequestError.value = "";
-};
-
-const requestLogin = async (email: string) => {
-  if (isRequestingLogin.value) {
-    return;
-  }
-
-  isRequestingLogin.value = true;
-  loginRequestError.value = "";
-
-  try {
-    await $fetch("/api/login-request", {
-      method: "POST",
-
-      body: {
-        email,
-      },
-    });
-
-    loginRequestSuccess.value = true;
-  } catch (error) {
-    console.error("Error requesting login link:", error);
-
-    loginRequestError.value =
-      "Failed to send the login link. Please try again.";
-  } finally {
-    isRequestingLogin.value = false;
-  }
-};
-
-const logout = async () => {
-  if (isLoggingOut.value) {
-    return;
-  }
-
-  isLoggingOut.value = true;
-
-  try {
-    try {
-      disconnectQueue(true);
-    } catch (error) {
-      console.error("Failed to disconnect from queue during logout:", error);
-    }
-
-    try {
-      endGame();
-    } catch (error) {
-      console.error("Failed to end game during logout:", error);
-    }
-
-    await $fetch("/api/user-logout", {
-      method: "POST",
-    });
-
-    // Do not manually mutate sruser/accessPassword here.
-    // Do not navigateTo("/") from "/".
-    if (import.meta.client) {
-      window.location.replace("/");
-    }
-  } catch (error) {
-    console.error("Logout failed:", error);
-
-    if (import.meta.client) {
-      window.alert("Failed to log out. Please try again.");
-    }
-  } finally {
-    isLoggingOut.value = false;
-  }
+  resetLoginRequest();
 };
 
 /* -------------------------------------------------------------------------- */
@@ -337,7 +273,34 @@ const endGame = () => {
   accessPassword.value = null;
 
   disconnectController();
+
+  window.setTimeout(() => {
+    void loadLeaderboard();
+  }, 1500);
 };
+const logout = async () => {
+  await logoutSession(() => {
+    try {
+      disconnectQueue(true);
+    } catch (error) {
+      console.error(
+        "Failed to disconnect from queue during logout:",
+        error,
+      );
+    }
+
+    try {
+      endGame();
+    } catch (error) {
+      console.error(
+        "Failed to end game during logout:",
+        error,
+      );
+    }
+  });
+};
+
+
 
 const handleMatchStart = async (
   password: string,
