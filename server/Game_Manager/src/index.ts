@@ -324,16 +324,6 @@ const resetGame = async () => {
     },
   );
 
-  /*
-   * MOVE the database/stat update code from
-   * your current RESETTING state here.
-   *
-   * Keep the order exactly the same for now.
-   */
-
-  // MOVE your existing Prisma Match create/update
-  // logic here.
-
   // --------------------------------------------------
   // Save completed match
   // --------------------------------------------------
@@ -464,23 +454,15 @@ const resetGame = async () => {
   // --------------------------------------------------
 
   //remove them from the player queue
+  players.splice(0, players.length);
+
   //makes it so now there's no players curerntlyl anymore
-  currentPlayers.length = 0;
-  score1 = 0;
-  score2 = 0;
+  currentPlayers.splice(0, currentPlayers.length);
+
   //now that game just ended robots are not ready until the raspberry pi says so.
   robots_ready = false;
 
-  players.splice(0, players.length);
-
-  currentPlayers.splice(0, currentPlayers.length);
-
-  robots_ready = false;
-
   timer = 0;
-
-  score1 = 0;
-  score2 = 0;
 
   /*
    * Temporary controller authorization should
@@ -567,7 +549,6 @@ const gameCycle = setInterval(async () => {
 
     if (allResponded || confirmationExpired) {
       await resolveMatchConfirmation(expectedPlayers);
-      
     }
     if (game_state === GAME_STATE.SEND_CONFIRM && confirmation_timer > 0) {
       confirmation_timer--;
@@ -584,8 +565,6 @@ const gameCycle = setInterval(async () => {
     }
   } else if (game_state == GAME_STATE.RESETTING) {
     await resetGame();
-
-    resetMatchConfirmation();
   }
 }, 1000);
 
@@ -597,7 +576,13 @@ const wss_client_gm = new WebSocketServer({ noServer: true });
 wss_client_gm.on(
   "connection",
   (ws: any, request: IncomingMessage, username: string, user_id: string) => {
-    console.log("New connection!");
+    console.log(
+  `[SSE] Client connected: ${clientID}`,
+);
+
+console.log(
+  `[SSE] Active clients: ${sse_clients.length}`,
+);
 
     // kick user if ws connection is lost or closed
     ws.onclose = (event: any) => {
@@ -618,7 +603,7 @@ wss_client_gm.on(
       if (type === "JOIN_QUEUE") {
         // should already be in
         const index = queue.findIndex((element) => {
-          return element.username === username;
+          return element.user_id === user_id;
         });
         // do not let in if user is in game
         const player_index = players.findIndex(
@@ -664,7 +649,7 @@ wss_client_gm.on(
         ) {
           //see if the user is marked as a player now
           const player_index = players.findIndex((element) => {
-            return element.username === username;
+            return element.user_id === user_id;
           });
           // make sure players do not accept/decline multiple times
           if (player_index == -1) {
@@ -810,7 +795,7 @@ const broadcastSse = (message: unknown) => {
   }
 };
 
-// Establish SSE connection. This one broadcasts to all clients regardless of if they're in the queue or not.
+// Establish SSE connection. This one broadcasts to all clients regardless of if thn("close"ey're in the queue or not.
 app_sse.get("/sse-info", (request, response) => {
   const headers = {
     "Content-Type": "text/event-stream",
@@ -829,7 +814,15 @@ app_sse.get("/sse-info", (request, response) => {
   sse_clients.push(newClient);
 
   request.on("close", () => {
-    console.log("Client Connection closed");
+    const index = sse_clients.findIndex((client) => client.id === clientID);
+
+    if (index !== -1) {
+      sse_clients.splice(index, 1);
+    }
+
+    console.log(`[SSE] Client disconnected: ${clientID}`);
+
+    console.log(`[SSE] Active clients: ${sse_clients.length}`);
   });
 });
 
