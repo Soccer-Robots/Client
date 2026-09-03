@@ -213,12 +213,17 @@ const toggleTheme = () => {
 /* Shared game state                                                          */
 /* -------------------------------------------------------------------------- */
 
+
+//for testing stream
+// const isInGame = ref(true);
+
+// const streamType = ref<"twitch" | "janus">("janus");
+
 const isInGame = ref(false);
 
 const streamType = computed<"twitch" | "janus">(() => {
   return isInGame.value ? "janus" : "twitch";
 });
-
 /* -------------------------------------------------------------------------- */
 /* Robot controller                                                           */
 /* -------------------------------------------------------------------------- */

@@ -13,8 +13,15 @@ export default defineNuxtConfig({
       PORT_CLIENT_GM: '',
       PORT_WSS_CONTROLLER_CLIENT: '',
       PORT_SSE_GM: '',
+      janusUrl:
+        process.env.NUXT_PUBLIC_JANUS_URL ?? 
+        "http://10.42.0.1:8088/janus",
+      
+      janusStreamId:
+        Number(process.env.NUXT_PUBLIC_JANUS_STREAM_ID) ?? 43,
     }
   },
+  
 
   devtools: { enabled: true },
   modules: ['@nuxtjs/tailwindcss'],
