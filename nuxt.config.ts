@@ -18,7 +18,7 @@ export default defineNuxtConfig({
         "http://10.42.0.1:8088/janus",
       
       janusStreamId:
-        Number(process.env.NUXT_PUBLIC_JANUS_STREAM_ID) ?? 43,
+        Number(process.env.NUXT_PUBLIC_JANUS_STREAM_ID ?? 43),
     }
   },
   
